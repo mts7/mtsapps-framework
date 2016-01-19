@@ -587,7 +587,7 @@ class PdfMerge
      * @uses lower_underscore()
      * @uses upper_camel(0
      */
-    public function __set($name = '', mixed $value)
+    public function __set($name = '', $value)
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION, $value);
 

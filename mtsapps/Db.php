@@ -76,6 +76,9 @@ class Db
     public function __construct($params = array())
     {
         $this->Log = new Log();
+        if (is_array_ne($params) && array_key_exists('log_level', $params)) {
+            $this->Log->logLevel($params['log_level']);
+        }
         $file = __DIR__ . '/db_' . date('Y-m-d') . '.log';
         $log_file = $this->Log->file($file);
         if ($log_file !== $file) {
@@ -554,6 +557,8 @@ class Db
             $exception = $this->exception();
             $result = $exception->getMessage();
         }
+
+        $this->Log->write('result', Log::LOG_LEVEL_DEBUG, $result);
 
         return $result;
     }
