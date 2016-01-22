@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.05
+ * @version 1.07
  */
 namespace mtsapps;
 
@@ -56,6 +56,11 @@ class Db
      * @var \PDOStatement
      */
     private $stmt = null;
+
+    /**
+     * @var array
+     */
+    private $table_structure = array();
 
     /**
      * @var bool
@@ -308,6 +313,30 @@ class Db
             case 'first':
                 $result = $this->stmt->fetch(\PDO::FETCH_ASSOC);
                 break;
+            case 'keyvalue':
+                $rows = new DbIterator($this->stmt);
+                $id_field = '';
+                $value_field = '';
+                $result = array();
+                foreach ($rows as $ri => $row) {
+                    // prepare id and value field names
+                    if ($ri === 0) {
+                        $keys = array_keys($row);
+                        $num_keys = count($keys);
+                        if ($num_keys > 2) {
+                            $this->Log->write('Too many fields (' . $num_keys . ') found in query results; expected 2.', Log::LOG_LEVEL_WARNING);
+                        }
+                        unset($num_keys);
+                        $id_field = $keys[0];
+                        $value_field = $keys[1];
+                        unset($keys);
+                    }
+
+                    // assign key/value pairs to $result
+                    $result[$row[$id_field]] = $row[$value_field];
+                }
+                unset($rows, $id_field, $value_field);
+                break;
             case 'insert':
                 $result = $this->dbh->lastInsertId();
                 break;
@@ -521,6 +550,55 @@ class Db
 
 
     /**
+     * Get field structure based on table.field
+     *
+     * @param string $table
+     * @param string $field
+     * @return bool
+     * @uses Db::tableStructure()
+     */
+    public function fieldStructure($table = '', $field = '')
+    {
+        // input validation
+        if (!is_string_ne($table)) {
+            $this->Log->write('table must be a string', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+        if (!is_string_ne($field)) {
+            $this->Log->write('field name must be a string', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        // get table structure
+        $structure = $this->tableStructure($table);
+
+        // make sure structure is a valid array
+        if (!is_array_ne($structure)) {
+            $this->Log->write('error getting table structure for ' . $table, Log::LOG_LEVEL_ERROR);
+
+            return false;
+        }
+
+        // check for structure being written to property
+        if (!array_key_exists($table, $this->table_structure)) {
+            $this->Log->write('table ' . $table . ' not added to table_structure', Log::LOG_LEVEL_WARNING);
+            $this->table_structure[$table] = $structure;
+        }
+
+        // check for field existence
+        if (!array_key_exists($field, $structure)) {
+            $this->Log->write('field ' . $field . ' does not exist in table ' . $table, Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        return $structure[$field];
+    }
+
+
+    /**
      * Get a single value or all values from a table.
      *
      * @param string $table
@@ -724,6 +802,92 @@ class Db
         $this->Log->write('error processing value for type', Log::LOG_LEVEL_USER);
 
         return null;
+    }
+
+
+    /**
+     * Get table structure using DESCRIBE and cache the value if not already cached.
+     *
+     * @param string $table Table name
+     * @return array|bool
+     * @uses Db::$table_structure
+     */
+    public function tableStructure($table = '')
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!is_string_ne($table)) {
+            $this->Log->write('table name not provided', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        // use a cached value to avoid querying the database and processing again
+        if (array_key_exists($table, $this->table_structure) && is_array_ne($this->table_structure[$table])) {
+            $this->Log->write('using cached structure value', Log::LOG_LEVEL_USER);
+
+            return $this->table_structure[$table];
+        }
+
+        $sql = 'DESCRIBE ' . $table;
+
+        $fields = $this->query($sql, null, 'array');
+
+        if (!$fields) {
+            $this->Log->write('could not describe fields for ' . $table, Log::LOG_LEVEL_ERROR);
+
+            return false;
+        }
+
+        $type_pattern = '/([a-z]+)(\([\d]+\))? ?([a-z]+)?/';
+
+        $structure = array();
+        foreach ($fields as $field) {
+            $type = '';
+            $size = '';
+            $extra = '';
+            $matches = array();
+            // determine type attributes
+            if (preg_match($type_pattern, $field['Type'], $matches)) {
+                if (isset($matches[1])) {
+                    $type = $matches[1];
+                }
+                if (isset($matches[2])) {
+                    $size = str_replace(array('(', ')'), '', $matches[2]);
+                }
+                if (isset($matches[3])) {
+                    $extra = $matches[3];
+                }
+            }
+
+            switch ($field['Key']) {
+                case 'PRI':
+                    $key = 'Primary';
+                    break;
+                case 'MUL':
+                    $key = 'Multiple';
+                    break;
+                default:
+                    $key = '';
+                    break;
+            }
+
+            // build structure array
+            $structure[$field['Field']] = array(
+                'type' => $type,
+                'size' => $size,
+                'type_extra' => $extra,
+                'key' => $key,
+                'default' => $field['Default'],
+                'extra' => $field['Extra'],
+            );
+        }
+
+        // add array to property for caching purposes
+        $this->table_structure[$table] = $structure;
+
+        return $structure;
     }
 
 
