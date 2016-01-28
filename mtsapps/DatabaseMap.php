@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.02
+ * @version 1.03
  */
 
 /** mtsapps namespace */
@@ -59,9 +59,18 @@ abstract class DatabaseMap extends Db
      */
     public function __construct($params = array())
     {
-        $this->Log = new Log();
-        $file = __DIR__ . '/db_' . date('Y-m-d') . '.log';
-        $log_file = $this->Log->file($file);
+        if (is_array_ne($params) && array_key_exists('log_level', $params)) {
+            $log_level = $params['log_level'];
+        } else {
+            $log_level = Log::LOG_LEVEL_WARNING;
+        }
+        $file = 'db_' . date('Y-m-d') . '.log';
+        $this->Log = new Log([
+            'file' => $file,
+            'log_directory' => LOG_DIR,
+            'log_level' => $log_level,
+        ]);
+        $log_file = $this->Log->file();
         if ($log_file !== $file) {
             $this->Log->write('could not set file properly', Log::LOG_LEVEL_WARNING);
         }

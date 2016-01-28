@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.03
+ * @version 1.04
  *
  * Helper functions for mtsapps library
  */
@@ -217,6 +217,92 @@ function lower_underscore($str = '')
 
 
 /**
+ * Send email with PHPMailer or mail.
+ *
+ * @param string|array $to Email address or email addresses
+ * @param string $subject Subject
+ * @param string $body_text Plain-text message to use
+ * @param string|array $from Email address or array with name and email keys
+ * @param array $attachments File names to attach
+ * @param string $body_html HTML message to use
+ * @return bool|string
+ * @throws \vendor\PHPMailer\phpmailerException
+ */
+function mts_mail($to = '', $subject = '', $body_text = '', $from = '', $attachments = array(), $body_html = '')
+{
+    $mail = new \vendor\PHPMailer\PHPMailer();
+
+    if (!is_object($mail)) {
+        return mail($to, $subject, $body_text);
+    }
+
+    // to
+    if (is_string_ne($to)) {
+        $mail->addAddress($to, '');
+    } elseif (is_array_ne($to)) {
+        foreach($to as $email) {
+            $mail->addAddress($email, '');
+        }
+    } else {
+        // no $to address
+
+        return false;
+    }
+
+    // subject
+    $mail->Subject = $subject;
+
+    // body
+    if (is_string_ne($body_html)) {
+        $mail->msgHTML($body_html);
+        if (is_string_ne($body_text)) {
+            $mail->AltBody = $body_text;
+        }
+    } else {
+        $mail->Body = $body_text;
+    }
+
+    // from
+    if (is_array_ne($from)) {
+        if (array_key_exists('name', $from)) {
+            $from_name = $from['name'];
+        } else {
+            $from_name = '';
+        }
+
+        if (array_key_exists('email', $from)) {
+            $from_email = $from['email'];
+        } else {
+            $from_email = '';
+        }
+    } elseif (is_string_ne($from)) {
+        $from_email = $from;
+        $from_name = '';
+    } else {
+        $from_email = 'server@' . $_SERVER['HTTP_HOST'];
+        $from_name = 'Server Admin';
+    }
+    $mail->setFrom($from_email, $from_name);
+
+    // attachments
+    if (is_array_ne($attachments)) {
+        foreach($attachments as $attachment) {
+            if (file_exists($attachment)) {
+                $mail->addAttachment($attachment);
+            }
+        }
+    }
+
+    // send
+    if (!$mail->send()) {
+        return $mail->ErrorInfo;
+    } else {
+        return true;
+    }
+}
+
+
+/**
  * Parse a HTML file containing placeholder tags with the placeholders provided.
  * Placeholders look like [[+placeholder_name]]
  *
@@ -337,4 +423,3 @@ function upper_camel($str = '')
 
     return $first . implode('', $parts);
 }
-

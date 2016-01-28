@@ -3,7 +3,7 @@
  * Generate constants PHP file outside of namespace directories, based on values from the constant table.
  *
  * @author Mike Rodarte
- * @version 1.01
+ * @version 1.02
  */
 
 /**
@@ -52,9 +52,12 @@ class Constants extends Db
      */
     public function __construct($params = array())
     {
-        $this->Log = new Log();
-        $file = __DIR__ . '/db_' . date('Y-m-d') . '.log';
-        $log_file = $this->Log->file($file);
+        $file = 'db_' . date('Y-m-d') . '.log';
+        $this->Log = new Log([
+            'file' => $file,
+            'log_directory' => LOG_DIR,
+        ]);
+        $log_file = $this->Log->file();
         if ($log_file !== $file) {
             $this->Log->write('could not set file properly', Log::LOG_LEVEL_WARNING);
         }
@@ -66,6 +69,9 @@ class Constants extends Db
         $this->Log->write('set directory to ' . $this->directory, Log::LOG_LEVEL_USER);
 
         if (is_array_ne($params)) {
+            if (array_key_exists('log_level', $params)) {
+                $this->Log->logLevel($params['log_level']);
+            }
             $this->Log->write('params is an array', Log::LOG_LEVEL_USER);
 
             if (array_key_exists('file_name', $params)) {

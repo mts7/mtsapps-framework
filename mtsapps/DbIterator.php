@@ -3,7 +3,7 @@
  * Iterator for PDO
  *
  * @author Mike Rodarte
- * @version 1.01
+ * @version 1.02
  */
 
 /**
@@ -53,9 +53,13 @@ class DbIterator implements \Iterator
      */
     public function __construct(\PDOStatement $stmt)
     {
-        $this->Log = new Log();
-        $file = __DIR__ . '/db_' . date('Y-m-d') . '.log';
-        $log_file = $this->Log->file($file);
+        $file = 'db_' . date('Y-m-d') . '.log';
+        $this->Log = new Log([
+            'file' => $file,
+            'log_directory' => LOG_DIR,
+            'log_level' => Log::LOG_LEVEL_WARNING,
+        ]);
+        $log_file = $this->Log->file();
         if ($log_file !== $file) {
             $this->Log->write('could not set file properly', Log::LOG_LEVEL_WARNING);
         }

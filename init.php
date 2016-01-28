@@ -10,25 +10,20 @@ date_default_timezone_set($timezone);
 require_once 'helpers.php';
 require_once 'settings.php';
 
-spl_autoload_register(function($class) {
-    $base_dir = __DIR__ . DIRECTORY_SEPARATOR;
-    $file = $base_dir . str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
-
+spl_autoload_register(function ($class) {
     $include_directories = array(
-        'PdfMerge',
+        '',
+        'vendor',
+        'vendor/PdfMerge',
     );
 
-    if (file_exists($file)) {
-        require $file;
-    } else {
-        // handle other directories
-        foreach($include_directories as $inc) {
-            $dir = $base_dir . $inc . DIRECTORY_SEPARATOR;
-            $other_file = $dir . str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
+    // handle directories
+    foreach ($include_directories as $inc) {
+        $dir = realpath(__DIR__ . DIRECTORY_SEPARATOR . $inc) . DIRECTORY_SEPARATOR;
+        $file = $dir . str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
 
-            if (file_exists($other_file)) {
-                require $other_file;
-            }
+        if (file_exists($file)) {
+            require $file;
         }
     }
 });

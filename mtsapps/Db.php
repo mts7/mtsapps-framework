@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.07
+ * @version 1.08
  */
 namespace mtsapps;
 
@@ -43,6 +43,11 @@ class Db
     protected $Log = null;
 
     /**
+     * @var int
+     */
+    protected $log_level = 0;
+
+    /**
      * @var string
      */
     private $pass = '';
@@ -80,40 +85,53 @@ class Db
      */
     public function __construct($params = array())
     {
-        $this->Log = new Log();
+        $file = 'db_' . date('Y-m-d') . '.log';
         if (is_array_ne($params) && array_key_exists('log_level', $params)) {
-            $this->Log->logLevel($params['log_level']);
+            $log_level = $params['log_level'];
+        } else {
+            $log_level = Log::LOG_LEVEL_WARNING;
         }
-        $file = __DIR__ . '/db_' . date('Y-m-d') . '.log';
-        $log_file = $this->Log->file($file);
+        if (is_array_ne($params) && array_key_exists('log_directory', $params)) {
+            $log_directory = $params['log_directory'];
+        } else {
+            $log_directory = LOG_DIR;
+        }
+        $this->Log = new Log([
+            'file' => $file,
+            'log_level' => $log_level,
+            'log_directory' => $log_directory,
+        ]);
+        $log_file = $this->Log->file();
         if ($log_file !== $file) {
             $this->Log->write('could not set file properly', Log::LOG_LEVEL_WARNING);
         }
 
         $this->Log->write('Db::__construct()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (array_key_exists('user', $params) && is_string($params['user']) && strlen($params['user']) > 0) {
-            $this->user = $params['user'];
-        }
+        if (is_array_ne($params)) {
+            if (array_key_exists('user', $params) && is_string($params['user']) && strlen($params['user']) > 0) {
+                $this->user = $params['user'];
+            }
 
-        if (array_key_exists('pass', $params) && is_string($params['pass']) && strlen($params['pass']) > 0) {
-            $this->pass = $params['pass'];
-        }
+            if (array_key_exists('pass', $params) && is_string($params['pass']) && strlen($params['pass']) > 0) {
+                $this->pass = $params['pass'];
+            }
 
-        if (array_key_exists('host', $params) && is_string($params['host']) && strlen($params['host']) > 0) {
-            $this->host = $params['host'];
-        }
+            if (array_key_exists('host', $params) && is_string($params['host']) && strlen($params['host']) > 0) {
+                $this->host = $params['host'];
+            }
 
-        if (array_key_exists('db', $params) && is_string($params['db']) && strlen($params['db']) > 0) {
-            $this->dbname = $params['db'];
-        }
+            if (array_key_exists('db', $params) && is_string($params['db']) && strlen($params['db']) > 0) {
+                $this->dbname = $params['db'];
+            }
 
-        if (array_key_exists('dump_file', $params) && is_string_ne($params['dump_file'])) {
-            $path = realpath(__DIR__ . $params['dump_file']);
-            $this->dump_file = $path;
-        } else {
-            $now = date('Y-m-d');
-            $this->dump_file = realpath(__DIR__ . '/dump_' . $now . '.sql');
+            if (array_key_exists('dump_file', $params) && is_string_ne($params['dump_file'])) {
+                $path = realpath(__DIR__ . $params['dump_file']);
+                $this->dump_file = $path;
+            } else {
+                $now = date('Y-m-d');
+                $this->dump_file = realpath(__DIR__ . '/dump_' . $now . '.sql');
+            }
         }
 
         $this->connect();
@@ -753,6 +771,28 @@ class Db
 
             return $insert_id;
         }
+    }
+
+
+    /**
+     * Set and/or get the log level.
+     *
+     * @return int
+     * @uses Log::validateLevel()
+     */
+    public function logLevel()
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        $args = func_get_args();
+        if (is_array_ne($args)) {
+            if (is_valid_int($args[0]) && (is_object($this->Log) && $this->Log->validateLevel($args[0]))) {
+                $this->log_level = $args[0];
+                $this->Log->logLevel($this->log_level);
+            }
+        }
+
+        return $this->log_level;
     }
 
 

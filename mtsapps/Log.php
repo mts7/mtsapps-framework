@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.05
+ * @version 1.06
  */
 
 /**
@@ -63,6 +63,11 @@ class Log
     private $file = '';
 
     /**
+     * @var string
+     */
+    private $log_directory = '';
+
+    /**
      * @var int
      */
     private $log_level = 0;
@@ -90,6 +95,9 @@ class Log
 
         // set values from parameters
         if (is_array_ne($params)) {
+            if (array_key_exists('log_directory', $params)) {
+                $this->logDirectory($params['log_directory']);
+            }
             if (array_key_exists('log_level', $params) && is_valid_int($params['log_level'])) {
                 $this->logLevel($params['log_level']);
             }
@@ -160,8 +168,10 @@ class Log
     {
         // set the file name if the parameter is valid
         $args = func_get_args();
-        if (count($args) > 0 && is_string_ne($args[0]) && is_dir(dirname($args[0]))) {
+        if (count($args) > 0 && is_string_ne($args[0])) {
             $this->file = $args[0];
+        } else {
+            $this->file = $this->default_file;
         }
 
         // return the file name
@@ -175,6 +185,26 @@ class Log
     public function last()
     {
         return end($this->messages);
+    }
+
+
+    /**
+     * Set and/or get the log directory.
+     *
+     * @return string
+     */
+    public function logDirectory()
+    {
+        $args = func_get_args();
+        if (count($args) > 0) {
+            if (is_string_ne($args[0]) && is_dir(realpath($args[0]))) {
+                $this->log_directory = realpath($args[0]) . '/';
+            } else {
+                $this->write('invalid log directory', Log::LOG_LEVEL_WARNING, $args[0]);
+            }
+        }
+
+        return $this->log_directory;
     }
 
 
