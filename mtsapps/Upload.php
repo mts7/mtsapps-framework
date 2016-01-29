@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.00
+ * @version 1.01
  */
 
 /**
@@ -72,6 +72,21 @@ class Upload
      */
     private $post_file = array();
 
+    /**
+     * @var array
+     */
+    private $public_properties = array(
+        'accepted_exts',
+        'form_file',
+        'log_dir',
+        'log_file',
+        'log_level',
+        'max_size',
+        'output_file',
+        'output_path',
+        'overwrite',
+    );
+
 
     /**
      * Upload constructor.
@@ -82,57 +97,36 @@ class Upload
     {
         $this->log_dir .= '/';
 
+        // start a new Log
+        $this->Log = new Log([
+            'file' => $this->log_file,
+            'log_level' => $this->log_level,
+            'log_directory' => $this->log_dir,
+        ]);
+
         // handle input parameters
         if (is_array_ne($params)) {
-            if (array_key_exists('form_file', $params) && is_string_ne($params['form_file'])) {
-                $this->form_file = $params['form_file'];
-            }
-
-            if (array_key_exists('max_size', $params) && is_valid_int($params['max_size'], true)) {
-                $this->max_size = $params['max_size'];
-            }
-
-            if (array_key_exists('exts', $params) && is_array_ne($params['exts'])) {
-                $this->accepted_exts = $params['exts'];
-            }
-
-            if (array_key_exists('output_file', $params) && is_string_ne($params['output_file'])) {
-                $this->output_file = $params['output_file'];
-            }
-
-            if (array_key_exists('output_path', $params) && is_string_ne($params['output_path']) && is_dir($params['output_path'])) {
-                $this->output_path = realpath($params['output_path']) . '/';
-            }
-
-            if (array_key_exists('log_dir', $params) && is_string_ne($params['log_dir']) && is_dir($params['log_dir'])) {
-                $this->log_dir = realpath($params['log_dir']) . '/';
-            }
-
-            if (array_key_exists('log_file', $params) && is_string_ne($params['log_file'])) {
-                if (is_file($params['log_file'])) {
-                    $this->log_dir = pathinfo($params['log_file'], PATHINFO_DIRNAME);
-                    $this->log_file = pathinfo($params['log_file'], PATHINFO_BASENAME);
+            foreach($params as $key => $value) {
+                $method = upper_camel($key);
+                if (method_exists($this, $method)) {
+                    $this->$method($value);
                 } else {
-                    $this->log_file = $params['log_file'];
+                    $property = lower_underscore($key);
+                    if ($property === 'exts') {
+                        $property = 'accepted_exts';
+                    }
+                    if (property_exists($this, $property) && in_array($property, $this->public_properties)) {
+                        $type_value = gettype($value);
+                        $type_property = gettype($this->$property);
+                        if ($type_value === $type_property) {
+                            $this->$property = $value;
+                        }
+                    }
                 }
-            }
-
-            if (array_key_exists('log_level', $params) && is_valid_int($params['log_level'], true)) {
-                $this->log_level = $params['log_level'];
-            }
-
-            if (array_key_exists('overwrite', $params)) {
-                $this->overwrite = !!$params['overwrite'];
             }
         } else {
             $this->output_path = __DIR__ . '/';
-
         }
-
-        // start a new Log
-        $this->Log = new Log();
-        $this->Log->file($this->log_file);
-        $this->Log->logLevel($this->log_level);
 
         $this->init();
     }
@@ -188,6 +182,102 @@ class Upload
     public function lastMessage()
     {
         return $this->Log->last();
+    }
+
+
+    /**
+     * Get and/or set the log directory.
+     *
+     * @param string $dir
+     * @return bool|string
+     */
+    public function logDir($dir = '')
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!is_string_ne($dir)) {
+            $this->Log->write('directory name missing', Log::LOG_LEVEL_WARNING);
+
+            return $this->log_dir;
+        }
+
+        $log_dir = realpath($dir) . '/';
+        $this->Log->write('set log directory', Log::LOG_LEVEL_USER, $log_dir);
+
+        if (!is_dir($log_dir)) {
+            $this->Log->write('log directory is not a directory', Log::LOG_LEVEL_WARNING, $log_dir);
+
+            return false;
+        }
+
+        $this->log_dir = $log_dir;
+        $this->Log->write('set log directory', Log::LOG_LEVEL_SYSTEM_INFORMATION, $log_dir);
+
+        return $this->log_dir;
+    }
+
+
+    /**
+     * Get and/or set the log file [and directory].
+     *
+     * @param string $file
+     * @return string
+     */
+    public function logFile($file = '')
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!is_string_ne($file)) {
+            $this->Log->write('file name missing', Log::LOG_LEVEL_WARNING);
+
+            return $this->log_file;
+        }
+
+        // set file and maybe directory
+        if (is_file($file)) {
+            $this->log_dir = pathinfo($file, PATHINFO_DIRNAME);
+            $this->log_file = pathinfo($file, PATHINFO_BASENAME);
+            $this->Log->write('set directory', Log::LOG_LEVEL_USER, $this->log_dir);
+        } else {
+            $this->log_file = $file;
+        }
+        $this->Log->write('set file', Log::LOG_LEVEL_USER, $this->log_file);
+
+        return $this->log_file;
+    }
+
+
+    /**
+     * Get and/or set the log level for this class and Log.
+     *
+     * @param int $level
+     * @return bool|int
+     */
+    public function logLevel($level = 0)
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!is_valid_int($level, true)) {
+            $this->Log->write('level value invalid', Log::LOG_LEVEL_WARNING);
+
+            return $this->log_level;
+        }
+
+        if (!Log::validateLevel($level)) {
+            $this->Log->write('level is not acceptable', Log::LOG_LEVEL_WARNING, $level);
+
+            return false;
+        }
+
+        $this->log_level = $level;
+        $this->Log->write('set log_level', Log::LOG_LEVEL_USER, $this->log_level);
+
+        $this->Log->logLevel($this->log_level);
+
+        return $this->log_level;
     }
 
 
@@ -273,7 +363,7 @@ class Upload
         // validate extension
         $ext = pathinfo($this->post_file['name'], PATHINFO_EXTENSION);
         if (!in_array($ext, $this->accepted_exts)) {
-            $this->Log->write('extension {' . $ext . '} is not allowed. Please upload a file with one of these extensions: ' . implode(', ', $this->accepted_exts), Log::LOG_LEVEL_WARNING);
+            $this->Log->write('extension {' . $ext . '} is not allowed. Please upload a file with one of these extensions', Log::LOG_LEVEL_WARNING, $this->accepted_exts);
 
             return false;
         }

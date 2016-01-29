@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.06
+ * @version 1.07
  */
 
 /**
@@ -237,7 +237,7 @@ class Log
      * @param $level
      * @return bool
      */
-    public function validateLevel($level)
+    public static function validateLevel($level)
     {
         $reflection = new \ReflectionClass(__CLASS__);
         $constants = $reflection->getConstants();
@@ -284,7 +284,7 @@ class Log
 
         if ($this->log_level <= $log_level && is_string_ne($this->file)) {
             // write the message to the provided log file
-            return file_put_contents($this->file, $message . PHP_EOL, FILE_APPEND);
+            return file_put_contents($this->log_directory . $this->file, $message . PHP_EOL, FILE_APPEND);
         }
 
         return true;
