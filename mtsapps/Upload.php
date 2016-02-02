@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.01
+ * @version 1.02
  */
 
 /**
@@ -21,6 +21,16 @@ class Upload
      * @var array
      */
     private $accepted_exts = array();
+
+    /**
+     * @var bool
+     */
+    private $ajax = false;
+
+    /**
+     * @var array
+     */
+    private $files = array();
 
     /**
      * @var string
@@ -77,6 +87,7 @@ class Upload
      */
     private $public_properties = array(
         'accepted_exts',
+        'ajax',
         'form_file',
         'log_dir',
         'log_file',
@@ -85,7 +96,13 @@ class Upload
         'output_file',
         'output_path',
         'overwrite',
+        'upload_file_name',
     );
+
+    /**
+     * @var string
+     */
+    private $upload_file_name = '';
 
 
     /**
@@ -100,13 +117,13 @@ class Upload
         // start a new Log
         $this->Log = new Log([
             'file' => $this->log_file,
-            'log_level' => $this->log_level,
+            'log_level' => Log::LOG_LEVEL_DEBUG,
             'log_directory' => $this->log_dir,
         ]);
 
         // handle input parameters
         if (is_array_ne($params)) {
-            foreach($params as $key => $value) {
+            foreach ($params as $key => $value) {
                 $method = upper_camel($key);
                 if (method_exists($this, $method)) {
                     $this->$method($value);
@@ -136,13 +153,26 @@ class Upload
      * Initial method to use to set the value of post_file.
      *
      * @return bool
+     * @throws \Exception
      * @uses Upload::$form_file
      * @uses $_FILES
      * @uses Upload::handleError()
      */
     public function init()
     {
-        $this->Log->write('Upload::init()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        if (!$this->validateServerSize()) {
+            $this->Log->write('uploaded file is bigger than post_max_size', Log::LOG_LEVEL_ERROR);
+
+            throw new \Exception('Uploaded file is too big.');
+        }
+
+        if ($this->ajax) {
+            return true;
+        }
+
+        $this->arrangeFiles();
 
         // input validation
         if (!is_string_ne($this->form_file)) {
@@ -157,10 +187,17 @@ class Upload
             return false;
         }
 
-        $this->post_file = $_FILES[$this->form_file];
+        $this->post_file = $this->files[$this->form_file][0];
+        $this->Log->write(__FUNCTION__ . ' post_file', Log::LOG_LEVEL_USER, $this->post_file);
 
         // check for errors
         $file_error = $this->post_file['error'];
+        if (!is_valid_int($file_error)) {
+            $this->Log->write('invalid type of error', Log::LOG_LEVEL_WARNING, gettype($file_error));
+
+            return false;
+        }
+
         if ($file_error > UPLOAD_ERR_OK) {
             $this->handleError($file_error);
 
@@ -273,9 +310,12 @@ class Upload
         }
 
         $this->log_level = $level;
-        $this->Log->write('set log_level', Log::LOG_LEVEL_USER, $this->log_level);
-
-        $this->Log->logLevel($this->log_level);
+        $set_level = $this->Log->logLevel($this->log_level);
+        if ($set_level === $this->log_level) {
+            $this->Log->write('set log_level', Log::LOG_LEVEL_USER, $this->log_level);
+        } else {
+            $this->Log->write('could not set level', Log::LOG_LEVEL_WARNING, $set_level);
+        }
 
         return $this->log_level;
     }
@@ -314,7 +354,7 @@ class Upload
                 if (!is_dir($args[0])) {
                     $this->Log->write('output path provided {' . $args[0] . '} is not a valid directory', Log::LOG_LEVEL_WARNING);
                 } else {
-                    $this->output_path = $args[0];
+                    $this->output_path = realpath($args[0]) . DIRECTORY_SEPARATOR;
                 }
             }
         }
@@ -337,36 +377,17 @@ class Upload
      */
     public function process()
     {
-        $this->Log->write('Upload::process()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        // make sure there is a post file
-        if (!is_array_ne($this->post_file)) {
-            $this->Log->write('The $_FILES array has not been saved. Please call init() first.', Log::LOG_LEVEL_WARNING);
-
-            return false;
-        }
-
-        // verify output directory exists
-        if (!is_dir($this->output_path)) {
-            $this->Log->write('Output path not specified or does not exist. Please set the output path with Upload::outputPath() and process again.', Log::LOG_LEVEL_WARNING);
+        // input validation
+        if (!$this->validateFile()) {
+            $this->Log->write('file is invalid', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
-        // check max file size
-        if (!$this->validateMaxSize()) {
-            $this->Log->write('File size {' . $this->humanSize($this->post_file['size']) . '} is greater than max file size {' . $this->humanSize($this->max_size) . '}.', Log::LOG_LEVEL_WARNING);
-
-            return false;
-        }
-
-        // validate extension
-        $ext = pathinfo($this->post_file['name'], PATHINFO_EXTENSION);
-        if (!in_array($ext, $this->accepted_exts)) {
-            $this->Log->write('extension {' . $ext . '} is not allowed. Please upload a file with one of these extensions', Log::LOG_LEVEL_WARNING, $this->accepted_exts);
-
-            return false;
-        }
+        // set output path
+        $this->outputPath($this->output_path);
 
         // validate output file does not already exist
         if (!$this->overwrite && is_file($this->output_path . $this->output_file)) {
@@ -389,11 +410,104 @@ class Upload
 
 
     /**
+     * Get file from input and move it to the output directory.
+     *
+     * @return bool
+     */
+    public function processAjax()
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!$this->ajax) {
+            $this->Log->write('AJAX must be specified to do AJAX uploads', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        if (!is_string_ne($this->upload_file_name)) {
+            $this->Log->write('a file name must be specified', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        // set post_file
+        $this->post_file['tmp_name'] = $this->upload_file_name;
+        $this->post_file['name'] = $this->upload_file_name;
+        $this->Log->write('set name fields in post_file', Log::LOG_LEVEL_USER, $this->post_file);
+
+        $file = file_get_contents('php://input');
+        $this->post_file['size'] = strlen($file);
+
+        if (!$this->validateFile()) {
+            $this->Log->write('file is invalid', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        // set output path
+        $this->outputPath($this->output_path);
+
+        $this->output_file = $this->uniqueName();
+        $this->Log->write('output_file', Log::LOG_LEVEL_USER, $this->output_file);
+
+        // write file to output_file
+        $bytes = file_put_contents($this->output_path . $this->output_file, $file);
+        $this->Log->write('wrote ' . $bytes . ' bytes', Log::LOG_LEVEL_USER, $this->output_path . $this->output_file);
+
+        return $bytes > 0;
+    }
+
+
+    /**
+     * Process multiple files uploaded.
+     *
+     * @return array
+     */
+    public function processMultiple()
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!is_array_ne($this->files)) {
+            $this->Log->write('need to have files available', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        $results = array();
+        foreach ($this->files as $form_name => $array) {
+            $this->form_file = $form_name;
+            $this->Log->write('working with form file element', Log::LOG_LEVEL_USER, $this->form_file);
+
+            foreach ($array as $values) {
+                $this->Log->write('values', Log::LOG_LEVEL_USER, $values);
+                $this->post_file = array(
+                    'name' => $values['name'],
+                    'type' => $values['type'],
+                    'tmp_name' => $values['tmp_name'],
+                    'error' => $values['error'],
+                    'size' => $values['size'],
+                );
+                $this->Log->write(__FUNCTION__ . ' post_file', Log::LOG_LEVEL_USER, $this->post_file);
+                $this->output_file = $this->uniqueName();
+                $results[] = $this->process();
+            }
+        }
+        $this->Log->write('results', Log::LOG_LEVEL_USER, $results);
+
+        return $results;
+    }
+
+
+    /**
      * Reset members to prepare for another upload file.
      */
     public function reset()
     {
         $this->accepted_exts = array();
+        $this->ajax = false;
+        $this->files = array();
         $this->form_file = '';
         $this->Log = null;
         $this->log_dir = __DIR__ . '/';
@@ -415,15 +529,17 @@ class Upload
      */
     public function uniqueName()
     {
-        $this->Log->write('Upload::uniqueName()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!array_key_exists('tmp_name', $this->post_file) || !is_file($this->post_file['tmp_name'])) {
+        if (!array_key_exists('tmp_name', $this->post_file) || (!$this->ajax && !is_file($this->post_file['tmp_name']))) {
             $this->Log->write('Could not find temporary file.', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
-        $hash_name = sha1_file($this->post_file['tmp_name']) . pathinfo($this->post_file['name'], PATHINFO_EXTENSION);
+        $temp_hash = $this->ajax ? md5($this->post_file['tmp_name']) : sha1_file($this->post_file['tmp_name']);
+
+        $hash_name = md5(microtime(true) . $temp_hash) . '.' . pathinfo($this->post_file['name'], PATHINFO_EXTENSION);
 
         if ($hash_name === false) {
             $this->Log->write('Could not get hash of temporary file.', Log::LOG_LEVEL_WARNING);
@@ -436,6 +552,36 @@ class Upload
 
 
     /**
+     * Rearrange the $_FILES super global to group each upload file in one array element.
+     *
+     * @return bool
+     * @uses $_FILES
+     */
+    private function arrangeFiles()
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!is_array_ne($_FILES)) {
+            $this->Log->write('there were no files uploaded', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        foreach ($_FILES as $form_field => $array) {
+            foreach ($array as $key => $values) {
+                foreach ($values as $index => $value) {
+                    $this->files[$form_field][$index][$key] = $value;
+                }
+            }
+        }
+        $this->Log->write('arranged files', Log::LOG_LEVEL_USER, $this->files);
+
+        return count($this->files) > 0;
+    }
+
+
+    /**
      * Return error message, based on upload error status.
      *
      * @param int $error
@@ -443,7 +589,7 @@ class Upload
      */
     private function handleError($error)
     {
-        $this->Log->write('Upload::handleError()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!is_valid_int($error, true)) {
             $this->Log->write('Cannot handle an error that is not a positive integer.', Log::LOG_LEVEL_WARNING);
@@ -474,7 +620,7 @@ class Upload
                 $message = 'A PHP extension stopped the file upload.';
                 break;
             default:
-                $message = 'Unknown upload error (' . $error . ')';
+                $message = 'Unknown upload error (' . get_string($error) . ')';
                 break;
         }
 
@@ -502,6 +648,46 @@ class Upload
 
 
     /**
+     * Validate path, size, extension with post_file.
+     *
+     * @return bool
+     */
+    private function validateFile()
+    {
+        // make sure there is a post file
+        if (!is_array_ne($this->post_file)) {
+            $this->Log->write('The $_FILES array has not been saved. Please call init() first.', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        // verify output directory exists
+        if (!is_dir($this->output_path)) {
+            $this->Log->write('Output path not specified or does not exist. Please set the output path with Upload::outputPath() and process again.', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        // check max file size
+        if (!$this->validateMaxSize()) {
+            $this->Log->write('File size {' . $this->humanSize($this->post_file['size']) . '} is greater than max file size {' . $this->humanSize($this->max_size) . '}.', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        // validate extension
+        $ext = pathinfo($this->post_file['name'], PATHINFO_EXTENSION);
+        if (!in_array($ext, $this->accepted_exts)) {
+            $this->Log->write('extension {' . $ext . '} is not allowed. Please upload a file with one of these extensions', Log::LOG_LEVEL_WARNING, $this->accepted_exts);
+
+            return false;
+        }
+
+        return true;
+    }
+
+
+    /**
      * Validate the size of the upload file.
      *
      * @return bool
@@ -510,10 +696,35 @@ class Upload
      */
     private function validateMaxSize()
     {
-        $this->Log->write('Upload::validateMaxSize()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         $file_size = $this->post_file['size'];
 
-        return $file_size <= $this->max_size;
+        $valid = $file_size <= $this->max_size;
+        $this->Log->write('valid file size', Log::LOG_LEVEL_USER, $valid);
+
+        return $valid;
+    }
+
+
+    /**
+     * Validate content length with post_max_size (useful for large files).
+     *
+     * @return bool
+     */
+    private function validateServerSize()
+    {
+        $valid = false;
+
+        if (isset($_SERVER['CONTENT_LENGTH'])) {
+            $post_max_size = ini_get('post_max_size');
+            $content_length = $_SERVER['CONTENT_LENGTH'];
+
+            $post_max_size = bytes_from_shorthand($post_max_size);
+
+            $valid = $content_length <= $post_max_size;
+        }
+
+        return $valid;
     }
 }
