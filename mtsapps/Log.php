@@ -280,9 +280,10 @@ class Log
         }
 
         $message = date($this->date_format) . $this->separator . $message;
-        $this->messages[] = $message;
 
         if ($this->log_level <= $log_level && is_string_ne($this->file)) {
+            $this->messages[] = $message;
+
             // write the message to the provided log file
             return file_put_contents($this->log_directory . $this->file, $message . PHP_EOL, FILE_APPEND);
         }

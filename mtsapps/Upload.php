@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.02
+ * @version 1.03
  */
 
 /**
@@ -537,7 +537,7 @@ class Upload
             return false;
         }
 
-        $temp_hash = $this->ajax ? md5($this->post_file['tmp_name']) : sha1_file($this->post_file['tmp_name']);
+        $temp_hash = $this->ajax ? sha1($this->post_file['tmp_name']) : sha1_file($this->post_file['tmp_name']);
 
         $hash_name = md5(microtime(true) . $temp_hash) . '.' . pathinfo($this->post_file['name'], PATHINFO_EXTENSION);
 

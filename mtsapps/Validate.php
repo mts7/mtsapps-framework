@@ -1,7 +1,6 @@
 <?php
 namespace mtsapps;
 
-
 class Validate
 {
     protected $error_message = '';

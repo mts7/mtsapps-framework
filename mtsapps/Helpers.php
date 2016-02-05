@@ -1,12 +1,19 @@
 <?php
 /**
- * @author Mike Rodarte
- * @version 1.05
- *
- * Helper functions for mtsapps library
- */
+* Helper functions
+*
+* @author Mike Rodarte
+* @version 1.00
+*/
+namespace mtsapps;
 
-
+/**
+* Class Helpers
+*
+* @package mtsapps
+*/
+class Helpers
+{
 /**
  * Flatten a multi-dimensional array
  * http://stackoverflow.com/questions/1319903/how-to-flatten-a-multidimensional-array#answer-1320259
@@ -14,9 +21,9 @@
  * @param array $array Multi-dimensional array to flatten
  * @return array
  */
-function array_flatten($array = array())
+public static function array_flatten($array = array())
 {
-    if (!is_array_ne($array)) {
+    if (!self::is_array_ne($array)) {
         return array();
     }
 
@@ -41,10 +48,10 @@ function array_flatten($array = array())
  * @param string $backup_path
  * @return int
  */
-function backup_database($host = '', $user = '', $pass = '', $db = '', $backup_path = '')
+public static function backup_database($host = '', $user = '', $pass = '', $db = '', $backup_path = '')
 {
     // use this directory if one is not provided
-    if (!is_string_ne($backup_path) || !is_dir($backup_path)) {
+    if (!self::is_string_ne($backup_path) || !is_dir($backup_path)) {
         $backup_path = '__DIR__';
     }
     // verify the path is valid and has a trailing /
@@ -70,7 +77,7 @@ function backup_database($host = '', $user = '', $pass = '', $db = '', $backup_p
  * @param string $short
  * @return int|string
  */
-function bytes_from_shorthand($short = '')
+public static function bytes_from_shorthand($short = '')
 {
     if (!is_string_ne($short)) {
         return $short;
@@ -91,17 +98,17 @@ function bytes_from_shorthand($short = '')
 /**
  * Display an exception.
  *
- * @param Exception $ex
+ * @param \Exception $ex
  * @param bool|false $trace
  * @return string
  */
-function display_exception(Exception $ex, $trace = false)
+public static function display_exception(\Exception $ex, $trace = false)
 {
     $br = "<br />\n";
     $output = get_class($ex) . $br;
     $output .= $ex->getMessage() . ' in ' . $ex->getFile() . ' on line ' . $ex->getLine() . $br;
     if ($trace) {
-        $output .= 'Trace: ' . $br . print_array($ex->getTrace(), 0, false);
+        $output .= 'Trace: ' . $br . self::print_array($ex->getTrace(), 0, false);
     }
 
     return $output;
@@ -114,7 +121,7 @@ function display_exception(Exception $ex, $trace = false)
  * @param mixed $value
  * @return string
  */
-function get_string($value)
+public static function get_string($value)
 {
     $type = gettype($value);
 
@@ -131,7 +138,7 @@ function get_string($value)
             break;
         case 'array':
         case 'object':
-            $result = print_array($value, 0, false);
+            $result = self::print_array($value, 0, false);
             break;
         case 'resource':
             $result = get_resource_type($value);
@@ -157,7 +164,7 @@ function get_string($value)
  * @param array $value
  * @return bool
  */
-function is_array_ne($value)
+public static function is_array_ne($value)
 {
     return is_array($value) && count($value) > 0;
 }
@@ -169,7 +176,7 @@ function is_array_ne($value)
  * @param string $value
  * @return bool
  */
-function is_date($value = '')
+public static function is_date($value = '')
 {
     $time = strtotime($value);
 
@@ -183,7 +190,7 @@ function is_date($value = '')
  * @param string $value
  * @return bool
  */
-function is_string_ne($value)
+public static function is_string_ne($value)
 {
     return is_string($value) && strlen($value) > 0 && (string)$value === $value;
 }
@@ -196,7 +203,7 @@ function is_string_ne($value)
  * @param bool|false $unsigned
  * @return bool
  */
-function is_valid_decimal($value = 0.00, $unsigned = false)
+public static function is_valid_decimal($value = 0.00, $unsigned = false)
 {
     if (!is_numeric($value)) {
         return false;
@@ -207,7 +214,7 @@ function is_valid_decimal($value = 0.00, $unsigned = false)
         return false;
     }
 
-    return is_valid_int($parts[0], $unsigned) && is_valid_int($parts[1], true);
+    return self::is_valid_int($parts[0], $unsigned) && self::is_valid_int($parts[1], true);
 }
 
 
@@ -218,7 +225,7 @@ function is_valid_decimal($value = 0.00, $unsigned = false)
  * @param bool $unsigned Do additional check for positive or negative.
  * @return bool
  */
-function is_valid_int($value, $unsigned = false)
+public static function is_valid_int($value, $unsigned = false)
 {
     $result = is_int($value) || (is_numeric($value) && (int)$value === $value + 0);
 
@@ -230,9 +237,9 @@ function is_valid_int($value, $unsigned = false)
 }
 
 
-function lower_underscore($str = '')
+public static function lower_underscore($str = '')
 {
-    if (!is_string_ne($str)) {
+    if (!self::is_string_ne($str)) {
         return '';
     }
 
@@ -252,7 +259,7 @@ function lower_underscore($str = '')
  * @return bool|string
  * @throws \vendor\PHPMailer\phpmailerException
  */
-function mts_mail($to = '', $subject = '', $body_text = '', $from = '', $attachments = array(), $body_html = '')
+public static function mts_mail($to = '', $subject = '', $body_text = '', $from = '', $attachments = array(), $body_html = '')
 {
     $mail = new \vendor\PHPMailer\PHPMailer();
 
@@ -335,7 +342,7 @@ function mts_mail($to = '', $subject = '', $body_text = '', $from = '', $attachm
  * @param array $placeholders Array of key/value pairs to use for search and replace.
  * @return string HTML file with replacements made (might still have lingering [[+placeholder]] tags)
  */
-function parse_html($file = '', $placeholders = array())
+public static function parse_html($file = '', $placeholders = array())
 {
     if (!is_string($file) || strlen($file) > 0 || is_file($file) || file_exists($file)) {
         // file is invalid
@@ -365,7 +372,7 @@ function parse_html($file = '', $placeholders = array())
  * @return string
  * @uses get_string()
  */
-function print_array($array, $tab_mult = 0, $display = true, $html = true, $php = false)
+public static function print_array($array, $tab_mult = 0, $display = true, $html = true, $php = false)
 {
     if (is_object($array)) {
         $array = (array)$array;
@@ -399,7 +406,7 @@ function print_array($array, $tab_mult = 0, $display = true, $html = true, $php 
                 if (!empty($val)) {
                     $tab_mult++;
                     // call this function and provide it with the current tab count
-                    $output .= print_array($val, $tab_mult, false, !!$html, !!$php);
+                    $output .= self::print_array($val, $tab_mult, false, !!$html, !!$php);
                 }
                 $output .= str_repeat($tab, $mult);
                 $output .= ')';
@@ -455,9 +462,9 @@ function print_array($array, $tab_mult = 0, $display = true, $html = true, $php 
  * @param string $value
  * @return mixed|string
  */
-function space_to_underscore($value = '')
+public static function space_to_underscore($value = '')
 {
-    if (!is_string_ne($value)) {
+    if (!self::is_string_ne($value)) {
         return $value;
     }
 
@@ -471,9 +478,9 @@ function space_to_underscore($value = '')
  * @param string $str
  * @return string
  */
-function upper_camel($str = '')
+public static function upper_camel($str = '')
 {
-    if (!is_string_ne($str)) {
+    if (!self::is_string_ne($str)) {
         return '';
     }
 
@@ -484,3 +491,4 @@ function upper_camel($str = '')
     return $first . implode('', $parts);
 }
 
+}
