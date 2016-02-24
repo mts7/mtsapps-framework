@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.07
+ * @version 1.08
  */
 
 /**
@@ -94,23 +94,23 @@ class Log
         $this->log_level = $this::LOG_LEVEL_ERROR;
 
         // set values from parameters
-        if (is_array_ne($params)) {
+        if (Helpers::is_array_ne($params)) {
             if (array_key_exists('log_directory', $params)) {
                 $this->logDirectory($params['log_directory']);
             }
-            if (array_key_exists('log_level', $params) && is_valid_int($params['log_level'])) {
+            if (array_key_exists('log_level', $params) && Helpers::is_valid_int($params['log_level'])) {
                 $this->logLevel($params['log_level']);
             }
 
-            if (array_key_exists('file', $params) && is_string_ne($params['file'])) {
+            if (array_key_exists('file', $params) && Helpers::is_string_ne($params['file'])) {
                 $this->file($params['file']);
             }
 
-            if (array_key_exists('date_format', $params) && is_string_ne($params['date_format'])) {
+            if (array_key_exists('date_format', $params) && Helpers::is_string_ne($params['date_format'])) {
                 $this->date_format = $params['date_format'];
             }
 
-            if (array_key_exists('separator', $params) && is_string_ne($params['separator'])) {
+            if (array_key_exists('separator', $params) && Helpers::is_string_ne($params['separator'])) {
                 $this->separator = $params['separator'];
             }
         }
@@ -168,7 +168,7 @@ class Log
     {
         // set the file name if the parameter is valid
         $args = func_get_args();
-        if (count($args) > 0 && is_string_ne($args[0])) {
+        if (count($args) > 0 && Helpers::is_string_ne($args[0])) {
             $this->file = $args[0];
         } else {
             $this->file = $this->default_file;
@@ -197,7 +197,7 @@ class Log
     {
         $args = func_get_args();
         if (count($args) > 0) {
-            if (is_string_ne($args[0]) && is_dir(realpath($args[0]))) {
+            if (Helpers::is_string_ne($args[0]) && is_dir(realpath($args[0]))) {
                 $this->log_directory = realpath($args[0]) . '/';
             } else {
                 $this->write('invalid log directory', Log::LOG_LEVEL_WARNING, $args[0]);
@@ -219,7 +219,7 @@ class Log
         // set the log level if the parameter is valid
         $args = func_get_args();
         if (count($args) > 0) {
-            if (is_valid_int($args[0]) && $this->validateLevel($args[0])) {
+            if (Helpers::is_valid_int($args[0]) && $this->validateLevel($args[0])) {
                 $this->log_level = $args[0];
             } else {
                 $this->write('invalid log level {' . $args[0] . '}', Log::LOG_LEVEL_WARNING);
@@ -261,7 +261,7 @@ class Log
     public function write($message = '', $log_level = Log::LOG_LEVEL_SYSTEM_INFORMATION)
     {
         // input validation
-        if (!is_string_ne($message)) {
+        if (!Helpers::is_string_ne($message)) {
             return false;
         }
 
@@ -270,7 +270,7 @@ class Log
             // check for value and convert it to a string for writing
             if (isset($value)) {
                 // convert $value to string
-                $value = get_string($value);
+                $value = Helpers::get_string($value);
 
                 // remove HTML line breaks from log message
                 $value = str_replace(array("<br />\n", '<br />', '&nbsp;'), array("\n", "\n", ' '), $value);
@@ -281,7 +281,7 @@ class Log
 
         $message = date($this->date_format) . $this->separator . $message;
 
-        if ($this->log_level <= $log_level && is_string_ne($this->file)) {
+        if ($this->log_level <= $log_level && Helpers::is_string_ne($this->file)) {
             $this->messages[] = $message;
 
             // write the message to the provided log file

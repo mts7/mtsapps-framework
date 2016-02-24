@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.00
+ * @version 1.01
  */
 
 /**
@@ -76,7 +76,7 @@ class Convert
         $this->Log->write('Convert::inputFile()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($file_path) || !is_file($file_path)) {
+        if (!Helpers::is_string_ne($file_path) || !is_file($file_path)) {
             $this->Log->write('File path {' . $file_path . '} is invalid.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -99,19 +99,19 @@ class Convert
      */
     public function process()
     {
-        if (!is_string_ne($this->input_file)) {
+        if (!Helpers::is_string_ne($this->input_file)) {
             $this->Log->write('Set the input file path name before attempting to convert the file.', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
-        if (!is_string_ne($this->type_from)) {
+        if (!Helpers::is_string_ne($this->type_from)) {
             $this->Log->write('type_from was not set, so get type_from from the input file name', Log::LOG_LEVEL_USER);
             // get type_from from the input file name
             $this->typeFrom(pathinfo($this->input_file, PATHINFO_EXTENSION));
         }
 
-        if (!is_string_ne($this->type_to)) {
+        if (!Helpers::is_string_ne($this->type_to)) {
             $this->Log->write('Set the destination type with Convert::typeTo() before attempting to convert the file.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -152,8 +152,8 @@ class Convert
     public function typeFrom()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->type_from = $args[0];
             } else {
                 $this->Log->write('typeFrom requires a string parameter.', Log::LOG_LEVEL_WARNING);
@@ -173,8 +173,8 @@ class Convert
     public function typeTo()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->type_to = $args[0];
             } else {
                 $this->Log->write('typeTo requires a string parameter.', Log::LOG_LEVEL_WARNING);
@@ -203,7 +203,7 @@ class Convert
     {
         $this->Log->write('Convert::uploadFile()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_string_ne($form_file)) {
+        if (!Helpers::is_string_ne($form_file)) {
             $this->Log->write('Form file name must be provided.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -211,7 +211,7 @@ class Convert
 
         $exts = $this->extensions[$expected_type];
 
-        if (!is_array_ne($exts)) {
+        if (!Helpers::is_array_ne($exts)) {
             $this->Log->write('Expected type {' . $expected_type . '} is not valid.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -253,7 +253,7 @@ class Convert
         $this->Log->write('Convert::replaceExtension()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($ext)) {
+        if (!Helpers::is_string_ne($ext)) {
             $this->Log->write('Extension must be provided.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -283,7 +283,7 @@ class Convert
         $command = '/usr/bin/soffice --headless --convert-to pdf ' . $this->input_file;
         exec($command, $output, $return_var);
 
-        if (is_valid_int($return_var) && $return_var != 0) {
+        if (Helpers::is_valid_int($return_var) && $return_var != 0) {
             $this->Log->write('An error occurred when executing command:' . PHP_EOL . implode(PHP_EOL, $output), Log::LOG_LEVEL_WARNING);
 
             return false;

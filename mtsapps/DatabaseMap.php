@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.03
+ * @version 1.04
  */
 
 /** mtsapps namespace */
@@ -59,7 +59,7 @@ abstract class DatabaseMap extends Db
      */
     public function __construct($params = array())
     {
-        if (is_array_ne($params) && array_key_exists('log_level', $params)) {
+        if (Helpers::is_array_ne($params) && array_key_exists('log_level', $params)) {
             $log_level = $params['log_level'];
         } else {
             $log_level = Log::LOG_LEVEL_WARNING;
@@ -94,7 +94,7 @@ abstract class DatabaseMap extends Db
         $this->Log->write('DatabaseMap::addMap()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_array_ne($map)) {
+        if (!Helpers::is_array_ne($map)) {
             $this->Log->write('map is not an array', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -126,7 +126,7 @@ abstract class DatabaseMap extends Db
     {
         $this->Log->write('DatabaseMap::addMapItem()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_string_ne($from_table) || !is_string_ne($from_field) || !is_string_ne($to_table) || !is_string_ne($to_field)) {
+        if (!Helpers::is_string_ne($from_table) || !Helpers::is_string_ne($from_field) || !Helpers::is_string_ne($to_table) || !Helpers::is_string_ne($to_field)) {
             $this->Log->write('tables OR fields are invalid', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -178,7 +178,7 @@ abstract class DatabaseMap extends Db
         $this->Log->write('populating tables', Log::LOG_LEVEL_USER);
         $this->getTables();
 
-        if (!is_array_ne($this->from_tables)) {
+        if (!Helpers::is_array_ne($this->from_tables)) {
             $this->Log->write('from tables was not set properly', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -194,7 +194,7 @@ abstract class DatabaseMap extends Db
             $this->buildToValues($table);
         } // end loop
 
-        if (!is_array_ne($this->to_values)) {
+        if (!Helpers::is_array_ne($this->to_values)) {
             $this->Log->write('could not build to values properly', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -268,7 +268,7 @@ abstract class DatabaseMap extends Db
     {
         $this->Log->write('DatabaseMap::buildSelect()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_string_ne($table) || !is_array_ne($fields)) {
+        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($fields)) {
             $this->Log->write('table OR fields is not valid', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -295,7 +295,7 @@ abstract class DatabaseMap extends Db
         $this->Log->write('DatabaseMap::buildToValues()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_array_ne($this->from_values[$from_table])) {
+        if (!Helpers::is_array_ne($this->from_values[$from_table])) {
             $this->Log->write('from values does not contain records for from table', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -339,7 +339,7 @@ abstract class DatabaseMap extends Db
             } // end foreach row
 
             // add the new to row to the to values array, indexed by to table
-            if (is_string_ne($to_table) && is_array_ne($to_row)) {
+            if (Helpers::is_string_ne($to_table) && Helpers::is_array_ne($to_row)) {
                 $this->to_values[$to_table][] = $to_row;
             }
         } // end foreach from_values[from_table]
@@ -376,20 +376,20 @@ abstract class DatabaseMap extends Db
             list($from_table, $from_field) = explode($this->table_separator, $from);
             list($to_table, $to_field) = explode($this->table_separator, $to);
 
-            if (is_string_ne($from_table)) {
+            if (Helpers::is_string_ne($from_table)) {
                 if (!array_key_exists($from_table, $this->from_tables)) {
                     $this->from_tables[$from_table] = array();
                 }
-                if (is_string_ne($from_field) && !array_search($from_field, $this->from_tables[$from_table])) {
+                if (Helpers::is_string_ne($from_field) && !array_search($from_field, $this->from_tables[$from_table])) {
                     $this->from_tables[$from_table][] = $from_field;
                 }
             }
 
-            if (is_string_ne($to_table)) {
+            if (Helpers::is_string_ne($to_table)) {
                 if (!array_key_exists($to_table, $this->to_tables)) {
                     $this->to_tables[$to_table] = array();
                 }
-                if (is_string_ne($to_field) && !array_search($to_field, $this->to_tables[$to_table])) {
+                if (Helpers::is_string_ne($to_field) && !array_search($to_field, $this->to_tables[$to_table])) {
                     $this->to_tables[$to_table][] = $to_field;
                 }
             }
@@ -436,7 +436,7 @@ abstract class DatabaseMap extends Db
         $this->Log->write('DatabaseMap::insertValues()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($table) || !is_array_ne($this->to_values[$table])) {
+        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($this->to_values[$table])) {
             $this->Log->write('table is invalid or to values does not contain table ' . $table, Log::LOG_LEVEL_WARNING);
 
             return false;

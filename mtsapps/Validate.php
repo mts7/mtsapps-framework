@@ -1,8 +1,24 @@
 <?php
+/**
+ * @author Mike Rodarte
+ * @version 1.01
+ */
+
+/**
+ * mtsapps namespace
+ */
 namespace mtsapps;
 
+/**
+ * Class Validate
+ *
+ * @package mtsapps
+ */
 class Validate
 {
+    /**
+     * @var string
+     */
     protected $error_message = '';
 
 
@@ -15,7 +31,7 @@ class Validate
      */
     public function email($email = '', $network = false)
     {
-        if (!is_string_ne($email)) {
+        if (!Helpers::is_string_ne($email)) {
             $this->error_message = 'Empty input: email';
 
             return false;
@@ -29,13 +45,13 @@ class Validate
 
         list($user, $server) = explode('@', $email);
 
-        if (!is_string_ne($user)) {
+        if (!Helpers::is_string_ne($user)) {
             $this->error_message = 'Empty input: email user portion';
 
             return false;
         }
 
-        if (!is_string_ne($server)) {
+        if (!Helpers::is_string_ne($server)) {
             $this->error_message = 'Empty input: email server portion';
 
             return false;
@@ -105,7 +121,7 @@ class Validate
      */
     public function phone($phone = '', $strict = false)
     {
-        if (!is_string_ne($phone)) {
+        if (!Helpers::is_string_ne($phone)) {
             $this->error_message = 'Empty input: phone';
 
             return false;

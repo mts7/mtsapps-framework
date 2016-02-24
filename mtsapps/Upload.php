@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.03
+ * @version 1.04
  */
 
 /**
@@ -122,13 +122,13 @@ class Upload
         ]);
 
         // handle input parameters
-        if (is_array_ne($params)) {
+        if (Helpers::is_array_ne($params)) {
             foreach ($params as $key => $value) {
-                $method = upper_camel($key);
+                $method = Helpers::upper_camel($key);
                 if (method_exists($this, $method)) {
                     $this->$method($value);
                 } else {
-                    $property = lower_underscore($key);
+                    $property = Helpers::lower_underscore($key);
                     if ($property === 'exts') {
                         $property = 'accepted_exts';
                     }
@@ -175,7 +175,7 @@ class Upload
         $this->arrangeFiles();
 
         // input validation
-        if (!is_string_ne($this->form_file)) {
+        if (!Helpers::is_string_ne($this->form_file)) {
             $this->Log->write('Form file field name needs to be provided before uploading can begin.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -192,7 +192,7 @@ class Upload
 
         // check for errors
         $file_error = $this->post_file['error'];
-        if (!is_valid_int($file_error)) {
+        if (!Helpers::is_valid_int($file_error)) {
             $this->Log->write('invalid type of error', Log::LOG_LEVEL_WARNING, gettype($file_error));
 
             return false;
@@ -233,7 +233,7 @@ class Upload
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($dir)) {
+        if (!Helpers::is_string_ne($dir)) {
             $this->Log->write('directory name missing', Log::LOG_LEVEL_WARNING);
 
             return $this->log_dir;
@@ -266,7 +266,7 @@ class Upload
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($file)) {
+        if (!Helpers::is_string_ne($file)) {
             $this->Log->write('file name missing', Log::LOG_LEVEL_WARNING);
 
             return $this->log_file;
@@ -297,7 +297,7 @@ class Upload
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_valid_int($level, true)) {
+        if (!Helpers::is_valid_int($level, true)) {
             $this->Log->write('level value invalid', Log::LOG_LEVEL_WARNING);
 
             return $this->log_level;
@@ -329,8 +329,8 @@ class Upload
     public function outputFile()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->output_file = $args[0];
             } else {
                 $this->Log->write('Provided argument is a ' . gettype($args[0]) . ' instead of a string.', Log::LOG_LEVEL_WARNING);
@@ -349,8 +349,8 @@ class Upload
     public function outputPath()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 if (!is_dir($args[0])) {
                     $this->Log->write('output path provided {' . $args[0] . '} is not a valid directory', Log::LOG_LEVEL_WARNING);
                 } else {
@@ -425,7 +425,7 @@ class Upload
             return false;
         }
 
-        if (!is_string_ne($this->upload_file_name)) {
+        if (!Helpers::is_string_ne($this->upload_file_name)) {
             $this->Log->write('a file name must be specified', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -469,7 +469,7 @@ class Upload
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_array_ne($this->files)) {
+        if (!Helpers::is_array_ne($this->files)) {
             $this->Log->write('need to have files available', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -562,7 +562,7 @@ class Upload
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_array_ne($_FILES)) {
+        if (!Helpers::is_array_ne($_FILES)) {
             $this->Log->write('there were no files uploaded', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -591,7 +591,7 @@ class Upload
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_valid_int($error, true)) {
+        if (!Helpers::is_valid_int($error, true)) {
             $this->Log->write('Cannot handle an error that is not a positive integer.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -620,7 +620,7 @@ class Upload
                 $message = 'A PHP extension stopped the file upload.';
                 break;
             default:
-                $message = 'Unknown upload error (' . get_string($error) . ')';
+                $message = 'Unknown upload error (' . Helpers::get_string($error) . ')';
                 break;
         }
 
@@ -655,7 +655,7 @@ class Upload
     private function validateFile()
     {
         // make sure there is a post file
-        if (!is_array_ne($this->post_file)) {
+        if (!Helpers::is_array_ne($this->post_file)) {
             $this->Log->write('The $_FILES array has not been saved. Please call init() first.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -720,7 +720,7 @@ class Upload
             $post_max_size = ini_get('post_max_size');
             $content_length = $_SERVER['CONTENT_LENGTH'];
 
-            $post_max_size = bytes_from_shorthand($post_max_size);
+            $post_max_size = Helpers::bytes_from_shorthand($post_max_size);
 
             $valid = $content_length <= $post_max_size;
         }

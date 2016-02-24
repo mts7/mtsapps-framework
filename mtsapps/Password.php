@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.01
+ * @version 1.02
  */
 
 /**
@@ -26,7 +26,7 @@ class Password
     public static function generateRandom($length = 64)
     {
         // input validation
-        if (!is_valid_int($length, true)) {
+        if (!Helpers::is_valid_int($length, true)) {
             return '';
         }
 
@@ -92,7 +92,7 @@ class Password
     public static function generateFromInput($input = '', $length = 8, $unique = true)
     {
         // input validation
-        if (!is_string_ne($input)) {
+        if (!Helpers::is_string_ne($input)) {
             return false;
         }
 
@@ -270,7 +270,7 @@ class Password
     public static function hash($password = '', $salt = '')
     {
         // input validation
-        if (!is_string_ne($password) || !is_string_ne($salt)) {
+        if (!Helpers::is_string_ne($password) || !Helpers::is_string_ne($salt)) {
             return '';
         }
 

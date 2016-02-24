@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.02
+ * @version 1.03
  */
 
 /**
@@ -85,7 +85,7 @@ class User extends Db
     {
         $this->Login = new Login($params);
 
-        if (is_array_ne($params)) {
+        if (Helpers::is_array_ne($params)) {
             if (array_key_exists('user_id', $params)) {
                 $this->id = $params['user_id'];
             } elseif (array_key_exists('user_id', $_SESSION)) {
@@ -163,12 +163,17 @@ class User extends Db
         $to = $this->user_data['email'];
         $subject = 'Changed Password on ' . $_SERVER['HTTP_HOST'];
 
-        mts_mail($to, $subject, $message);
+        Helpers::mts_mail($to, $subject, $message);
 
         return $saved;
     }
 
 
+    /**
+     * @param $action
+     *
+     * @todo Create functionality or delete the method
+     */
     public function hasPermission($action)
     {
 
@@ -242,7 +247,7 @@ class User extends Db
 
         $this->getUser();
 
-        if (!is_string_ne($password)) {
+        if (!Helpers::is_string_ne($password)) {
             $this->Log->write('password not provided', Log::LOG_LEVEL_WARNING);
             $this->Login->add($this->id, 0, 'no password');
 
@@ -288,7 +293,7 @@ class User extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_valid_int($this->id, true)) {
+        if (!Helpers::is_valid_int($this->id, true)) {
             $this->Log->write('no user to log out', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -320,7 +325,7 @@ class User extends Db
             return false;
         }
 
-        if (!is_string_ne($this->user_data['email'])) {
+        if (!Helpers::is_string_ne($this->user_data['email'])) {
             $this->Log->write('no email address for user', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -352,10 +357,13 @@ class User extends Db
             $message = 'Your password was not reset. Please attempt to reset the password again.';
         }
 
-        return mts_mail($to, $subject, $message);
+        return Helpers::mts_mail($to, $subject, $message);
     }
 
 
+    /**
+     * @todo Create functionality or delete this method
+     */
     public function save()
     {
 
@@ -372,15 +380,15 @@ class User extends Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // use cached version
-        if (is_array_ne($this->user_data)) {
+        if (Helpers::is_array_ne($this->user_data)) {
             return $this->user_data;
         }
 
         // determine which field and value to use in the query
-        if (is_valid_int($this->id, true)) {
+        if (Helpers::is_valid_int($this->id, true)) {
             $where_field = $this->id_field;
             $value = $this->id;
-        } elseif (is_string_ne($this->name)) {
+        } elseif (Helpers::is_string_ne($this->name)) {
             $where_field = $this->name_field;
             $value = $this->name;
         } elseif (array_key_exists('user_id', $_SESSION)) {
@@ -402,7 +410,7 @@ class User extends Db
 
         $row = $this->query($sql, array($value), 'first');
 
-        if (!is_array_ne($row)) {
+        if (!Helpers::is_array_ne($row)) {
             return false;
         }
 
@@ -424,7 +432,7 @@ class User extends Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($this->name)) {
+        if (!Helpers::is_string_ne($this->name)) {
             $this->Log->write('no user', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -468,7 +476,7 @@ class User extends Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($password)) {
+        if (!Helpers::is_string_ne($password)) {
             $this->Log->write('password must be provided', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -479,7 +487,7 @@ class User extends Db
         );
 
         $updated = $this->update($this->table, $pairs, array($this->id_field => $this->id));
-        $this->Log->write('password saved', Log::LOG_LEVEL_USER, get_string($updated));
+        $this->Log->write('password saved', Log::LOG_LEVEL_USER, Helpers::get_string($updated));
 
         return $updated;
     }

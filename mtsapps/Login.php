@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.00
+ * @version 1.01
  */
 
 /**
@@ -39,7 +39,7 @@ class Login extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (is_array_ne($params)) {
+        if (Helpers::is_array_ne($params)) {
             if (array_key_exists('log_level', $params)) {
                 $this->logLevel($params['log_level']);
             }
@@ -68,13 +68,13 @@ class Login extends Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_valid_int($user_id, true)) {
+        if (!Helpers::is_valid_int($user_id, true)) {
             $this->Log->write('user_id is not a valid integer', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
-        if (!is_valid_int($success, true)) {
+        if (!Helpers::is_valid_int($success, true)) {
             $this->Log->write('success is not a valid integer', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -87,14 +87,14 @@ class Login extends Db
         }
 
         if (!is_string($message)) {
-            $message = get_string($message);
+            $message = Helpers::get_string($message);
         }
 
         // get values from PHP
         $ip_address = $_SERVER['REMOTE_ADDR'];
         $user_agent = $_SERVER['HTTP_USER_AGENT'];
         $session_id = session_id();
-        if (!is_string_ne($session_id)) {
+        if (!Helpers::is_string_ne($session_id)) {
             session_start();
             $session_id = session_id();
         }
@@ -128,7 +128,7 @@ class Login extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_valid_int($user_id, true)) {
+        if (!Helpers::is_valid_int($user_id, true)) {
             $this->Log->write('invalid user id', Log::LOG_LEVEL_WARNING, $user_id);
 
             return false;
@@ -159,7 +159,7 @@ class Login extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_valid_int($user_id, true)) {
+        if (!Helpers::is_valid_int($user_id, true)) {
             $this->Log->write('invalid user id', Log::LOG_LEVEL_WARNING, $user_id);
 
             return false;
@@ -187,7 +187,7 @@ class Login extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_valid_int($user_id, true)) {
+        if (!Helpers::is_valid_int($user_id, true)) {
             $this->Log->write('invalid user id', Log::LOG_LEVEL_WARNING, $user_id);
 
             return false;
@@ -216,7 +216,7 @@ class Login extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_valid_int($user_id, true)) {
+        if (!Helpers::is_valid_int($user_id, true)) {
             $this->Log->write('invalid user id', Log::LOG_LEVEL_WARNING, $user_id);
 
             return false;
@@ -246,13 +246,13 @@ class Login extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_string_ne($name)) {
+        if (!Helpers::is_string_ne($name)) {
             $this->Log->write('name not set', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
-        $property = lower_underscore($name);
+        $property = Helpers::lower_underscore($name);
 
         if (!property_exists($this, $property)) {
             $this->Log->write($property . ' does not exist as a property', Log::LOG_LEVEL_WARNING);
@@ -281,19 +281,19 @@ class Login extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_string_ne($name)) {
+        if (!Helpers::is_string_ne($name)) {
             $this->Log->write('name not set', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
-        $method = upper_camel($name);
+        $method = Helpers::upper_camel($name);
 
         if (method_exists($this, $method)) {
             $this->Log->write('method ' . $method . ' exists', Log::LOG_LEVEL_USER);
             $this->$method($value);
         } else {
-            $property = lower_underscore($name);
+            $property = Helpers::lower_underscore($name);
 
             if (!property_exists($this, $property)) {
                 $this->Log->write($property . ' does not exist as a property', Log::LOG_LEVEL_WARNING);

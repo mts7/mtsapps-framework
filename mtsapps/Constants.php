@@ -3,7 +3,7 @@
  * Generate constants PHP file outside of namespace directories, based on values from the constant table.
  *
  * @author Mike Rodarte
- * @version 1.02
+ * @version 1.03
  */
 
 /**
@@ -68,7 +68,7 @@ class Constants extends Db
         $this->directory = realpath(__DIR__ . '/../..');
         $this->Log->write('set directory to ' . $this->directory, Log::LOG_LEVEL_USER);
 
-        if (is_array_ne($params)) {
+        if (Helpers::is_array_ne($params)) {
             if (array_key_exists('log_level', $params)) {
                 $this->Log->logLevel($params['log_level']);
             }
@@ -78,11 +78,11 @@ class Constants extends Db
                 $this->setFileName($params['file_name']);
             }
 
-            if (array_key_exists('table_name', $params) && is_string_ne($params['table_name'])) {
+            if (array_key_exists('table_name', $params) && Helpers::is_string_ne($params['table_name'])) {
                 $this->constant_table = $params['table_name'];
             }
 
-            if (array_key_exists('log_file', $params) && is_string_ne($params['log_file'])) {
+            if (array_key_exists('log_file', $params) && Helpers::is_string_ne($params['log_file'])) {
                 $this->Log->file($params['log_file']);
             }
 
@@ -135,7 +135,7 @@ class Constants extends Db
         $this->Log->write('getting constant list', Log::LOG_LEVEL_USER);
         $rows = $this->getConstantList();
 
-        if (!is_array_ne($rows)) {
+        if (!Helpers::is_array_ne($rows)) {
             $this->Log->write('could not get constant list', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -168,7 +168,7 @@ class Constants extends Db
         $this->Log->write('Constants::setFileName()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($file)) {
+        if (!Helpers::is_string_ne($file)) {
             $this->Log->write('file is not valid', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -182,12 +182,17 @@ class Constants extends Db
         }
 
         $this->Log->write('setting file name after changing spaces to _ and making it lower case', Log::LOG_LEVEL_USER);
-        $this->file_name = strtolower(space_to_underscore($file));
+        $this->file_name = strtolower(Helpers::space_to_underscore($file));
 
         return true;
     }
 
 
+    /**
+     * Set the top content of the PHP file
+     *
+     * @return bool|int
+     */
     private function buildTopContent()
     {
         $file_path = $this->directory . DIRECTORY_SEPARATOR . $this->file_name;
@@ -239,7 +244,7 @@ class Constants extends Db
         // get rows from table
         $rows = $this->query($sql, array(), 'array');
 
-        if (!is_array_ne($rows)) {
+        if (!Helpers::is_array_ne($rows)) {
             $this->Log->write('could not find rows from query', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -252,7 +257,7 @@ class Constants extends Db
         $php .= ' */' . PHP_EOL;
         foreach ($rows as $row) {
             // prepare constant name (upper case, underscores instead of spaces, no multiple underscores together)
-            $val = strtoupper(space_to_underscore($prefix . '_' . $field));
+            $val = strtoupper(Helpers::space_to_underscore($prefix . '_' . $field));
             // add define statement to string
             $php .= 'define(\'' . $val . '\', ' . $this->quote($row[$value_field], $type) . ');' . PHP_EOL;
         }
@@ -296,7 +301,7 @@ class Constants extends Db
         $this->Log->write('Constants::write()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($this->php)) {
+        if (!Helpers::is_string_ne($this->php)) {
             $this->Log->write('php is not a string', Log::LOG_LEVEL_WARNING);
 
             return false;

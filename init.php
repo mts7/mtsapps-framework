@@ -7,7 +7,6 @@ $timezone = 'America/Denver';
 ini_set('date.timezone', $timezone);
 date_default_timezone_set($timezone);
 
-require_once 'helpers.php';
 require_once 'settings.php';
 
 spl_autoload_register(function ($class) {

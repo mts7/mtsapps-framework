@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.08
+ * @version 1.09
  */
 namespace mtsapps;
 
@@ -86,12 +86,12 @@ class Db
     public function __construct($params = array())
     {
         $file = 'db_' . date('Y-m-d') . '.log';
-        if (is_array_ne($params) && array_key_exists('log_level', $params)) {
+        if (Helpers::is_array_ne($params) && array_key_exists('log_level', $params)) {
             $log_level = $params['log_level'];
         } else {
             $log_level = Log::LOG_LEVEL_WARNING;
         }
-        if (is_array_ne($params) && array_key_exists('log_directory', $params)) {
+        if (Helpers::is_array_ne($params) && array_key_exists('log_directory', $params)) {
             $log_directory = $params['log_directory'];
         } else {
             $log_directory = LOG_DIR;
@@ -108,24 +108,24 @@ class Db
 
         $this->Log->write('Db::__construct()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (is_array_ne($params)) {
-            if (array_key_exists('user', $params) && is_string($params['user']) && strlen($params['user']) > 0) {
+        if (Helpers::is_array_ne($params)) {
+            if (array_key_exists('user', $params) && Helpers::is_string_ne($params['user'])) {
                 $this->user = $params['user'];
             }
 
-            if (array_key_exists('pass', $params) && is_string($params['pass']) && strlen($params['pass']) > 0) {
+            if (array_key_exists('pass', $params) && Helpers::is_string_ne($params['pass'])) {
                 $this->pass = $params['pass'];
             }
 
-            if (array_key_exists('host', $params) && is_string($params['host']) && strlen($params['host']) > 0) {
+            if (array_key_exists('host', $params) && Helpers::is_string_ne($params['host'])) {
                 $this->host = $params['host'];
             }
 
-            if (array_key_exists('db', $params) && is_string($params['db']) && strlen($params['db']) > 0) {
+            if (array_key_exists('db', $params) && Helpers::is_string_ne($params['db'])) {
                 $this->dbname = $params['db'];
             }
 
-            if (array_key_exists('dump_file', $params) && is_string_ne($params['dump_file'])) {
+            if (array_key_exists('dump_file', $params) && Helpers::is_string_ne($params['dump_file'])) {
                 $path = realpath(__DIR__ . $params['dump_file']);
                 $this->dump_file = $path;
             } else {
@@ -222,7 +222,7 @@ class Db
     {
         $this->Log->write('Db::executeQueue()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_array_ne($this->queue)) {
+        if (!Helpers::is_array_ne($this->queue)) {
             $this->Log->write('queue is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -254,7 +254,7 @@ class Db
         $this->Log->write('Db::query()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($sql)) {
+        if (!Helpers::is_string_ne($sql)) {
             $this->Log->write('sql is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -322,7 +322,7 @@ class Db
                 break;
             case 'flat':
                 $rows = $this->stmt->fetchAll(\PDO::FETCH_ASSOC);
-                $result = array_flatten($rows);
+                $result = Helpers::array_flatten($rows);
                 break;
             case 'single':
                 $row = $this->stmt->fetch(\PDO::FETCH_NUM);
@@ -389,7 +389,7 @@ class Db
     {
         $this->Log->write('Db::buildInsert()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_string_ne($table) || !is_array_ne($pairs)) {
+        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
             $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -412,7 +412,7 @@ class Db
                 $values[] = array_values($row);
             }
 
-            if (!is_array_ne($fields) || !is_array_ne($values)) {
+            if (!Helpers::is_array_ne($fields) || !Helpers::is_array_ne($values)) {
                 $this->Log->write('multiple rows fields OR values is empty', Log::LOG_LEVEL_WARNING);
 
                 return false;
@@ -425,12 +425,12 @@ class Db
             }
             $sql = substr($sql, 0, -2);
             // get all values into one array (to pass as parameters for placeholders)
-            $values = array_flatten($values);
+            $values = Helpers::array_flatten($values);
         } else {
             $fields = array_keys($pairs);
             $values = array_values($pairs);
 
-            if (!is_array_ne($fields) || !is_array_ne($values)) {
+            if (!Helpers::is_array_ne($fields) || !Helpers::is_array_ne($values)) {
                 $this->Log->write('fields OR values is empty', Log::LOG_LEVEL_WARNING);
 
                 return false;
@@ -465,7 +465,7 @@ class Db
         $this->Log->write('Db::buildUpdate()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($table) || !is_array_ne($pairs)) {
+        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
             $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -495,7 +495,7 @@ class Db
         $args = func_get_args();
         if (count($args) === 1) {
             $this->Log->write('argument provided', Log::LOG_LEVEL_USER);
-            if (is_string_ne($args[0])) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->dump_file = realpath(__DIR__ . '/' . $args[0]);
                 $this->Log->write('set dump file path', Log::LOG_LEVEL_USER);
             }
@@ -519,13 +519,13 @@ class Db
         $this->Log->write('Db::export()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // make sure there are tables to use
-        if (!is_array_ne($tables)) {
+        if (!Helpers::is_array_ne($tables)) {
             $this->Log->write('tables not provided, getting tables from database', Log::LOG_LEVEL_USER);
             // get tables from current database
             $sql = 'SHOW TABLES';
             $tables = $this->query($sql, array(), 'flat');
 
-            if (!is_array_ne($tables)) {
+            if (!Helpers::is_array_ne($tables)) {
                 $this->Log->write('could not find tables', Log::LOG_LEVEL_WARNING);
 
                 return false;
@@ -578,12 +578,12 @@ class Db
     public function fieldStructure($table = '', $field = '')
     {
         // input validation
-        if (!is_string_ne($table)) {
+        if (!Helpers::is_string_ne($table)) {
             $this->Log->write('table must be a string', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
-        if (!is_string_ne($field)) {
+        if (!Helpers::is_string_ne($field)) {
             $this->Log->write('field name must be a string', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -593,7 +593,7 @@ class Db
         $structure = $this->tableStructure($table);
 
         // make sure structure is a valid array
-        if (!is_array_ne($structure)) {
+        if (!Helpers::is_array_ne($structure)) {
             $this->Log->write('error getting table structure for ' . $table, Log::LOG_LEVEL_ERROR);
 
             return false;
@@ -629,7 +629,7 @@ class Db
         $this->Log->write('Db::get()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($table)) {
+        if (!Helpers::is_string_ne($table)) {
             $this->Log->write('no table provided', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -674,7 +674,7 @@ class Db
         $this->Log->write('Db::getIdFromName()');
 
         // input validation
-        if (!is_string_ne($table) || !is_string_ne($name)) {
+        if (!Helpers::is_string_ne($table) || !Helpers::is_string_ne($name)) {
             $this->Log->write('table OR name is empty', Log::LOG_LEVEL_WARNING);
 
             return null;
@@ -688,7 +688,7 @@ class Db
         $params[] = $name;
 
         // add any additional fields to WHERE to compare with $name
-        if (is_array_ne($where_fields)) {
+        if (Helpers::is_array_ne($where_fields)) {
             foreach ($where_fields as $field) {
                 $sql .= ' OR ' . $field . ' = ?';
                 $params[] = $name;
@@ -713,7 +713,7 @@ class Db
         $this->Log->write('Db::import()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($sql)) {
+        if (!Helpers::is_string_ne($sql)) {
             $this->Log->write('sql is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -721,7 +721,7 @@ class Db
 
         $num_rows = $this->dbh->exec($sql);
 
-        if (is_valid_int($num_rows)) {
+        if (Helpers::is_valid_int($num_rows)) {
             $this->Log->write('import success', Log::LOG_LEVEL_USER);
         } else {
             list($sql_state, $code, $message) = $this->dbh->errorInfo();
@@ -748,7 +748,7 @@ class Db
         $this->Log->write('Db::insert()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($table) || !is_array_ne($pairs)) {
+        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
             $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -785,8 +785,8 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_valid_int($args[0]) && (is_object($this->Log) && $this->Log->validateLevel($args[0]))) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_valid_int($args[0]) && (is_object($this->Log) && $this->Log->validateLevel($args[0]))) {
                 $this->log_level = $args[0];
                 $this->Log->logLevel($this->log_level);
             }
@@ -817,12 +817,12 @@ class Db
 
         switch ($type) {
             case 'int':
-                if (is_valid_int($value)) {
+                if (Helpers::is_valid_int($value)) {
                     return $value;
                 }
                 break;
             case 'decimal':
-                if (is_valid_decimal($value)) {
+                if (Helpers::is_valid_decimal($value)) {
                     return $value;
                 }
                 break;
@@ -830,7 +830,7 @@ class Db
                 return !!$value;
                 break;
             case 'date':
-                if (is_date($value)) {
+                if (Helpers::is_date($value)) {
                     return "'$value'";
                 }
                 break;
@@ -857,14 +857,14 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($table)) {
+        if (!Helpers::is_string_ne($table)) {
             $this->Log->write('table name not provided', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
         // use a cached value to avoid querying the database and processing again
-        if (array_key_exists($table, $this->table_structure) && is_array_ne($this->table_structure[$table])) {
+        if (array_key_exists($table, $this->table_structure) && Helpers::is_array_ne($this->table_structure[$table])) {
             $this->Log->write('using cached structure value', Log::LOG_LEVEL_USER);
 
             return $this->table_structure[$table];
@@ -951,13 +951,13 @@ class Db
         $this->Log->write('Db::update()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_string_ne($table) || !is_array_ne($pairs)) {
+        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
             $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
         }
 
-        if (!is_array_ne($where)) {
+        if (!Helpers::is_array_ne($where)) {
             $this->Log->write('there is no where clause', Log::LOG_LEVEL_WARNING);
             // there might be a problem: we will update everything
             // TODO: determine the best way to handle no WHERE clause
@@ -973,7 +973,7 @@ class Db
         $params = array_merge($params, $wparams);
 
         // handle LIMIT
-        if (is_valid_int($limit, true)) {
+        if (Helpers::is_valid_int($limit, true)) {
             $sql .= PHP_EOL . '  LIMIT ' . $limit;
         }
 
@@ -1047,7 +1047,7 @@ class Db
     {
         $this->Log->write('Db::bind()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_array_ne($parameters)) {
+        if (!Helpers::is_array_ne($parameters)) {
             $this->Log->write('parameters is empty', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -1085,7 +1085,7 @@ class Db
     {
         $this->Log->write('Db::where()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_array_ne($conditions)) {
+        if (!Helpers::is_array_ne($conditions)) {
             $this->Log->write('no conditions provided', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -1097,7 +1097,7 @@ class Db
         $i = 0;
         foreach ($conditions as $fieldop => $value) {
             list($field, $op) = explode(':', $fieldop);
-            if (!in_array(strtoupper($op), array('IN', 'NOT IN')) && is_array_ne($value)) {
+            if (!in_array(strtoupper($op), array('IN', 'NOT IN')) && Helpers::is_array_ne($value)) {
                 // this is a set of OR conditions
                 if ($i > 0) {
                     $sql .= PHP_EOL . '  OR ' . PHP_EOL;
@@ -1116,7 +1116,7 @@ class Db
                         $sql .= ')';
                         $params = array_merge($params, array_values($vvalue));
                     } else {
-                        if ($op === null || !is_string_ne($op)) {
+                        if ($op === null || !Helpers::is_string_ne($op)) {
                             $op = '=';
                         }
                         $sql .= '  ' . $field . ' ' . $op . ' ?';
@@ -1136,7 +1136,7 @@ class Db
                     $sql .= ')';
                     $params = array_merge($params, array_values($value));
                 } else {
-                    if ($op === null || !is_string_ne($op)) {
+                    if ($op === null || !Helpers::is_string_ne($op)) {
                         $op = '=';
                     }
                     $sql .= '  ' . $field . ' ' . $op . ' ?';
@@ -1163,7 +1163,7 @@ class Db
     {
         $this->Log->write('Db::writeFile()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!is_string_ne($file) || !is_file($file) || !file_exists($file)) {
+        if (!Helpers::is_string_ne($file) || !is_file($file) || !file_exists($file)) {
             $this->Log->write('file is not a string or does not exist for writing', Log::LOG_LEVEL_WARNING);
 
             return false;

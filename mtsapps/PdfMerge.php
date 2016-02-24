@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.00
+ * @version 1.01
  */
 
 /**
@@ -133,7 +133,7 @@ class PdfMerge
         ]);
         $this->logLevel(Log::LOG_LEVEL_WARNING);
 
-        if (is_array_ne($params)) {
+        if (Helpers::is_array_ne($params)) {
             if (array_key_exists('log_level', $params)) {
                 $this->logLevel($params['log_level']);
             }
@@ -141,7 +141,7 @@ class PdfMerge
 
             // set properties based on parameters
             foreach ($params as $param => $value) {
-                $method = upper_camel($param);
+                $method = Helpers::upper_camel($param);
                 $this->$method($value);
             }
         }
@@ -169,7 +169,7 @@ class PdfMerge
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!is_array_ne($this->files)) {
+        if (!Helpers::is_array_ne($this->files)) {
             $this->Log->write('Files is not an array. Enter at least 1 file before attempting to combine.', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -197,7 +197,7 @@ class PdfMerge
             $pdf->SetSubject($this->subject);
             $pdf->SetKeywords(implode(', ', $this->keywords));
 
-            if (is_string_ne($this->user_password)) {
+            if (Helpers::is_string_ne($this->user_password)) {
                 $pdf->SetProtection(array('print', 'copy'), $this->user_password, $this->owner_password);
             }
 
@@ -229,7 +229,7 @@ class PdfMerge
      */
     public function addFile($file = '')
     {
-        if (!is_string_ne($file) || !is_file($file)) {
+        if (!Helpers::is_string_ne($file) || !is_file($file)) {
             return false;
         }
 
@@ -247,7 +247,7 @@ class PdfMerge
      */
     public function addKeyword($keyword = '')
     {
-        if (!is_string_ne($keyword)) {
+        if (!Helpers::is_string_ne($keyword)) {
             return false;
         }
 
@@ -266,13 +266,13 @@ class PdfMerge
     public function author()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->author = $args[0];
-            } elseif (is_array_ne($args[0])) {
+            } elseif (Helpers::is_array_ne($args[0])) {
                 $this->author = implode(', ', $args[0]);
             } else {
-                $this->author = get_string($args[0]);
+                $this->author = Helpers::get_string($args[0]);
             }
         }
 
@@ -289,13 +289,13 @@ class PdfMerge
     public function creator()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->creator = $args[0];
-            } elseif (is_array_ne($args[0])) {
+            } elseif (Helpers::is_array_ne($args[0])) {
                 $this->creator = implode(', ', $args[0]);
             } else {
-                $this->creator = get_string($args[0]);
+                $this->creator = Helpers::get_string($args[0]);
             }
         }
 
@@ -311,7 +311,7 @@ class PdfMerge
     public function debug()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
+        if (Helpers::is_array_ne($args)) {
             if (is_bool($args[0])) {
                 $this->debug = $args[0];
             } else {
@@ -332,8 +332,8 @@ class PdfMerge
     public function directory()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0]) && is_dir($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0]) && is_dir($args[0])) {
                 $this->directory = $args[0];
             }
         }
@@ -351,10 +351,10 @@ class PdfMerge
     public function files()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_array_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_array_ne($args[0])) {
                 $this->files = $args[0];
-            } elseif (is_string_ne($args[0])) {
+            } elseif (Helpers::is_string_ne($args[0])) {
                 $this->addFile($args[0]);
             }
         }
@@ -372,10 +372,10 @@ class PdfMerge
     public function keywords()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_array_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_array_ne($args[0])) {
                 $this->keywords = $args[0];
-            } elseif (is_string_ne($args[0])) {
+            } elseif (Helpers::is_string_ne($args[0])) {
                 $this->addKeyword($args[0]);
             }
         }
@@ -393,8 +393,8 @@ class PdfMerge
     public function logLevel()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_valid_int($args[0]) && (is_object($this->Log) && $this->Log->validateLevel($args[0]))) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_valid_int($args[0]) && (is_object($this->Log) && $this->Log->validateLevel($args[0]))) {
                 $this->log_level = $args[0];
                 $this->Log->logLevel($this->log_level);
             }
@@ -413,8 +413,8 @@ class PdfMerge
     public function orientation()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0]) && in_array(strtoupper($args[0]), array('P', 'L'))) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0]) && in_array(strtoupper($args[0]), array('P', 'L'))) {
                 $this->orientation = strtoupper($args[0]);
             } else {
                 $this->Log->write('Invalid orientation {' . $args[0] . '} provided. Need to specify P or L.', Log::LOG_LEVEL_WARNING);
@@ -434,12 +434,12 @@ class PdfMerge
     public function outputFile()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $base_name = pathinfo($args[0], PATHINFO_BASENAME);
                 if ($base_name != $args[0]) {
                     $directory = pathinfo($args[0], PATHINFO_DIRNAME);
-                    if (is_string_ne($directory)) {
+                    if (Helpers::is_string_ne($directory)) {
                         if (is_dir($directory)) {
                             $this->Log->write('Need to set directory from ' . __FUNCTION__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
                             $this->directory($directory);
@@ -462,8 +462,8 @@ class PdfMerge
     public function ownerPassword()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->owner_password = $args[0];
             } else {
                 $this->Log->write('invalid type for owner password', Log::LOG_LEVEL_WARNING);
@@ -483,8 +483,8 @@ class PdfMerge
     public function paperSize()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->paper_size = $args[0];
             } else {
                 $this->Log->write('Invalid paper size provided.', Log::LOG_LEVEL_WARNING);
@@ -504,8 +504,8 @@ class PdfMerge
     public function subject()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->subject = $args[0];
             }
         }
@@ -523,8 +523,8 @@ class PdfMerge
     public function title()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->title = $args[0];
             }
         }
@@ -541,8 +541,8 @@ class PdfMerge
     public function userPassword()
     {
         $args = func_get_args();
-        if (is_array_ne($args)) {
-            if (is_string_ne($args[0])) {
+        if (Helpers::is_array_ne($args)) {
+            if (Helpers::is_string_ne($args[0])) {
                 $this->user_password = $args[0];
             } else {
                 $this->Log->write('invalid type for user password', Log::LOG_LEVEL_WARNING);
@@ -563,9 +563,9 @@ class PdfMerge
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        $property = lower_underscore($name);
+        $property = Helpers::lower_underscore($name);
         if (property_exists($this, $property)) {
-            $method = upper_camel($name);
+            $method = Helpers::upper_camel($name);
             if (method_exists($this, $method)) {
                 return $this->$method();
             } else {
@@ -591,9 +591,9 @@ class PdfMerge
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION, $value);
 
-        $property = lower_underscore($name);
+        $property = Helpers::lower_underscore($name);
         if (property_exists($this, $property)) {
-            $method = upper_camel($name);
+            $method = Helpers::upper_camel($name);
             if (method_exists($this, $method)) {
                 $this->$method($value);
             } else {
