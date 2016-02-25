@@ -279,9 +279,8 @@ class Log
             }
         }
 
-        $message = date($this->date_format) . $this->separator . $message;
-
         if ($this->log_level <= $log_level && Helpers::is_string_ne($this->file)) {
+            $message = date($this->date_format) . $this->separator . $message;
             $this->messages[] = $message;
 
             // write the message to the provided log file

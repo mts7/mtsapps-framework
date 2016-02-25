@@ -21,7 +21,7 @@ class Password
      *
      * @param int $length
      * @return string
-     * @uses is_valid_int() from helpers.php
+     * @uses Helpers::is_valid_int()
      */
     public static function generateRandom($length = 64)
     {
