@@ -161,7 +161,7 @@ class Constants extends Db
      *
      * @param string $file
      * @return bool
-     * @uses space_to_underscore()
+     * @uses Helpers::space_to_underscore()
      */
     public function setFileName($file = '')
     {

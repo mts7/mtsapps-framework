@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.02
+ * @version 1.03
  */
 
 /**
@@ -16,6 +16,27 @@ namespace mtsapps;
  */
 class Password
 {
+    /**
+     * Determine the character entropy percentage according to the maximum character set of 94 characters.
+     *
+     * @param string $password
+     * @return float|int
+     * @uses Helpers::entropy()
+     * @uses Helpers::$max_char_entropy
+     */
+    public static function entropyStrength($password = '') {
+        // input validation
+        if (!Helpers::is_string_ne($password)) {
+            return 0;
+        }
+
+        // determine entropy from characters, characters in string, and characters in character set
+        $entropy = Helpers::entropy($password);
+
+        return round($entropy['char'] * 100 / Helpers::$max_char_entropy);
+    }
+
+
     /**
      * Generate a pseudo-random password with letters, numbers, and symbols.
      *
@@ -33,13 +54,14 @@ class Password
         // generate a pseudo-random password
         $password = '';
 
-        // these are used as variable variables in the for loop
-        $all_lower_letters = 'abcdefghijklmnopqrstuvwxyz';
-        $all_upper_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        $all_numbers = '0123456789';
-        $all_symbols = '`~!@#$%^*()-_=+[{]}|:,.?';
-
-        $types = array('lower_letters', 'upper_letters', 'numbers', 'symbols');
+        // these are used in the for loop
+        $char_types = array(
+            'lower_letters' => 'abcdefghijklmnopqrstuvwxyz',
+            'upper_letters' => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            'numbers' => '0123456789',
+            'symbols' => '`~!@#$%^*()-_=+[{]}|:,.?',
+        );
+        $types = array_keys($char_types);
 
         $max_same = 3;
         $last_type = -1;
@@ -48,7 +70,7 @@ class Password
         for ($i = 0; $i < $length; $i++) {
             // determine the type of the character
             $type_index = rand(0, count($types) - 1);
-            $type = 'all_' . $types[$type_index];
+            $type = $char_types[$types[$type_index]];
 
             if ($last_type === $type_index) {
                 $same_type++;
@@ -283,6 +305,8 @@ class Password
      *
      * @param string $password
      * @return int 0-100
+     * @uses Helpers::$char_sets
+     * @uses Helpers::get_charset()
      */
     public static function strength($password = '')
     {
@@ -292,25 +316,37 @@ class Password
         }
 
         // set weights of different checks
+        /** @see Helpers::$char_sets */
         $weights = array(
             'repeat_all' => 0,
             'symbols_none' => 0,
             'case_same' => 0,
             'length_1' => 1,
-            'char_num' => 1,
+            'char_hex_letter_lower' => 1,
+            'char_hex_letter_upper' => 1,
+            'char_num' => 2,
             'symbols_one' => 2,
             'repeat_some' => 2,
-            'char_hex_letter' => 4,
-            'char_alpha' => 6,
+            'char_hex_letter' => 3,
+            'char_hex_letter_lower_num' => 4,
+            'char_hex_letter_upper_num' => 4,
+            'char_hex_letter_num' => 6,
             'length_8' => 7,
             'symbols_few' => 8,
-            'char_hex_letter_num' => 8,
+            'char_alpha_lower' => 8,
+            'char_alpha_upper' => 8,
+            'char_symbols' => 9,
+            'char_alpha_lower_num' => 10,
+            'char_alpha_upper_num' => 10,
             'length_13' => 10,
-            'char_alpha_num' => 10,
             'symbols_all' => 13,
+            'char_alpha' => 13,
             'char_hex_letter_num_symbol' => 14,
             'symbols_some' => 16,
-            'char_alpha_num_symbol' => 16,
+            'char_alpha_num' => 15,
+            'char_alpha_lower_num_symbol' => 16,
+            'char_alpha_upper_num_symbol' => 16,
+            'char_alpha_num_symbol' => 17,
             'length_24' => 22,
             'repeat_none' => 12,
             'case_mixed' => 14,
@@ -333,25 +369,13 @@ class Password
             }
         }
 
-        // check character diversity
-        // character diversity: a-fA-F, a-fA-F0-9, 0-9, a-zA-Z, a-zA-Z0-9, a-zA-Z0-9!@#$%^&*(), .+
-        $char_patterns = array(
-            'num' => '/([0-9]+)/',
-            'hex_letter' => '/([a-fA-F]+)/',
-            'hex_letter_num' => '/([a-fA-F0-9]+)/',
-            'hex_letter_num_symbol' => '/([a-fA-F0-9!@#\$%\^&\*\(\)`~\[\]\|,\-_]+)/',
-            'alpha' => '/([a-zA-Z]+)/',
-            'alpha_num' => '/([a-zA-Z0-9]+)/',
-            'alpha_num_symbol' => '/([a-zA-Z0-9!@#\$%\^&\*\(\)`~\[\]\|,\-_]+)/',
-        );
-
+        // check character set diversity
         $char_score = 0;
-        foreach ($char_patterns as $char_label => $pattern) {
-            if (1 === preg_match($pattern, $password, $matches)) {
-                if (isset($matches[1]) && $password === $matches[1]) {
-                    $char_score = $weights['char_' . $char_label];
-                    break;
-                }
+        $char_label = Helpers::get_charset($password);
+        $array = Helpers::$char_sets[$char_label];
+        if (1 === preg_match($array['pattern'], $password, $matches)) {
+            if (isset($matches[1]) && $password === $matches[1]) {
+                $char_score = $weights['char_' . $char_label];
             }
         }
         if ($char_score === 0) {
@@ -421,9 +445,9 @@ class Password
             $strength += $weights['symbols_all'];
         } elseif ($count >= 5) {
             $strength += $weights['symbols_many'];
-        } else if ($count >= 3) {
+        } elseif ($count >= 3) {
             $strength += $weights['symbols_some'];
-        } else if ($count > 1) {
+        } elseif ($count > 1) {
             $strength += $weights['symbols_few'];
         } elseif ($count == 1) {
             $strength += $weights['symbols_one'];

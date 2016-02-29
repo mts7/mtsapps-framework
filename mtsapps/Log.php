@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.08
+ * @version 1.09
  */
 
 /**
@@ -92,6 +92,9 @@ class Log
     {
         // set defaults
         $this->log_level = $this::LOG_LEVEL_ERROR;
+        if (defined('LOG_DIR')) {
+            $this->logDirectory(LOG_DIR);
+        }
 
         // set values from parameters
         if (Helpers::is_array_ne($params)) {
@@ -149,7 +152,7 @@ class Log
         $error .= $message . PHP_EOL;
 
         // add the trace if the log level is appropriate
-        if ($this->log_level < Log::LOG_LEVEL_WARNING) {
+        if ($this->log_level >= Log::LOG_LEVEL_WARNING) {
             $error .= $trace . PHP_EOL;
         }
 

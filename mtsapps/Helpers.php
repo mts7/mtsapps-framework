@@ -3,7 +3,7 @@
  * Helper functions
  *
  * @author Mike Rodarte
- * @version 1.01
+ * @version 1.02
  */
 namespace mtsapps;
 
@@ -15,11 +15,97 @@ namespace mtsapps;
 class Helpers
 {
     /**
+     * @var array Character sets (used for password-type applications)
+     * There were issues handling the back slash character, so it was removed from the symbols, though it is still used
+     * to calculate max_char_entropy.
+     */
+    public static $char_sets = array(
+        'num' => array(
+            'pattern' => '/([0-9]+)/',
+            'chars' => 10,
+        ),
+        'symbols' => array(
+            'pattern' => '/([`~!@#\$%\^&\*\(\)\-_=\+\[\{\]\}\|;:\'\",<\.>\/\?]+)/',
+            'chars' => 31,
+        ),
+        'hex_letter_lower' => array(
+            'pattern' => '/([a-f]+)/',
+            'chars' => 6,
+        ),
+        'hex_letter_upper' => array(
+            'pattern' => '/([A-F]+)/',
+            'chars' => 6,
+        ),
+        'hex_letter' => array(
+            'pattern' => '/([a-fA-F]+)/',
+            'chars' => 12,
+        ),
+        'hex_letter_lower_num' => array(
+            'pattern' => '/([a-f0-9]+)/',
+            'chars' => 16,
+        ),
+        'hex_letter_upper_num' => array(
+            'pattern' => '/([A-F0-9]+)/',
+            'chars' => 16,
+        ),
+        'hex_letter_num' => array(
+            'pattern' => '/([a-fA-F0-9]+)/',
+            'chars' => 22,
+        ),
+        'hex_letter_num_symbol' => array(
+            'pattern' => '/([a-fA-F0-9`~!@#\$%\^&\*\(\)\-_=\+\[\{\]\}\|;:\'\",<\.>\/\?]+)/',
+            'chars' => 53,
+        ),
+        'alpha_lower' => array(
+            'pattern' => '/([a-z]+)/',
+            'chars' => 26,
+        ),
+        'alpha_upper' => array(
+            'pattern' => '/([A-Z]+)/',
+            'chars' => 26,
+        ),
+        'alpha' => array(
+            'pattern' => '/([a-zA-Z]+)/',
+            'chars' => 52,
+        ),
+        'alpha_lower_num' => array(
+            'pattern' => '/([a-z0-9]+)/',
+            'chars' => 36,
+        ),
+        'alpha_upper_num' => array(
+            'pattern' => '/([A-Z0-9]+)/',
+            'chars' => 36,
+        ),
+        'alpha_num' => array(
+            'pattern' => '/([a-zA-Z0-9]+)/',
+            'chars' => 62,
+        ),
+        'alpha_lower_num_symbol' => array(
+            'pattern' => '/([a-z0-9`~!@#\$%\^&\*\(\)\-_=\+\[\{\]\}\|;:\'\",<\.>\/\?]+)/',
+            'chars' => 67,
+        ),
+        'alpha_upper_num_symbol' => array(
+            'pattern' => '/([A-Z0-9`~!@#\$%\^&\*\(\)\-_=\+\[\{\]\}\|;:\'\",<\.>\/\?]+)/',
+            'chars' => 67,
+        ),
+        'alpha_num_symbol' => array(
+            'pattern' => '/([a-zA-Z0-9`~!@#\$%\^&\*\(\)\-_=\+\[\{\]\}\|;:\'\",<\.>\/\?]+)/',
+            'chars' => 93,
+        ),
+    );
+
+    /**
+     * The maximum entropy value for 94 characters (like alpha_num_symbol, but with back slash)
+     * @var float
+     */
+    public static $max_char_entropy = 6.5545888516776;
+
+    /**
      * Flatten a multi-dimensional array
-     * http://stackoverflow.com/questions/1319903/how-to-flatten-a-multidimensional-array#answer-1320259
      *
      * @param array $array Multi-dimensional array to flatten
      * @return array
+     * @see http://stackoverflow.com/questions/1319903/how-to-flatten-a-multidimensional-array#answer-1320259
      */
     public static function array_flatten($array = array())
     {
@@ -45,14 +131,14 @@ class Helpers
      * @param string $user
      * @param string $pass
      * @param string $db
-     * @param string $backup_path
-     * @return int
+     * @param string $backup_path Directory to store the backup file
+     * @return int file size of written dump file
      */
     public static function backup_database($host = '', $user = '', $pass = '', $db = '', $backup_path = '')
     {
         // use this directory if one is not provided
         if (!self::is_string_ne($backup_path) || !is_dir($backup_path)) {
-            $backup_path = '__DIR__';
+            $backup_path = __DIR__;
         }
         // verify the path is valid and has a trailing /
         $backup_path = realpath($backup_path) . '/';
@@ -112,6 +198,68 @@ class Helpers
         }
 
         return $output;
+    }
+
+
+    /**
+     * Calculate the entropy bits of the string itself and the string according to its character set.
+     *
+     * @param string $string
+     * @return array
+     */
+    public static function entropy($string = '')
+    {
+        // nats
+        $self = 0;
+        $size = strlen($string);
+        foreach (count_chars($string, 1) as $v) {
+            $p = $v / $size;
+            $self -= $p * log($p) / log(2);
+        }
+        $char = $self;
+        $self = round($char * $size);
+
+        // combinations based on character sets
+        $bits = 0;
+        $charset = self::get_charset($string);
+        $array = self::$char_sets[$charset];
+        if (1 === preg_match($array['pattern'], $string, $matches)) {
+            if (isset($matches[1]) && $string === $matches[1]) {
+                $bits = round(log(pow($array['chars'], strlen($string)), 2));
+            }
+        }
+
+        return array(
+            'char' => $char,
+            'string' => $self,
+            'charset' => $bits,
+        );
+    }
+
+
+    /**
+     * Determine the character set of the string based on predetermined patterns.
+     *
+     * @param $string
+     * @return int|string
+     */
+    public static function get_charset($string)
+    {
+        if (!self::is_string_ne($string)) {
+            return 'empty';
+        }
+
+        $charset = '';
+        foreach (self::$char_sets as $label => $array) {
+            if (1 === preg_match($array['pattern'], $string, $matches)) {
+                if (isset($matches[1]) && $string === $matches[1]) {
+                    $charset = $label;
+                    break;
+                }
+            }
+        }
+
+        return $charset;
     }
 
 
@@ -347,6 +495,7 @@ class Helpers
      * @param string $file Complete file path of HTML file
      * @param array $placeholders Array of key/value pairs to use for search and replace.
      * @return string HTML file with replacements made (might still have lingering [[+placeholder]] tags)
+     * @todo parse inner tags first
      */
     public static function parse_html($file = '', $placeholders = array())
     {
@@ -357,7 +506,7 @@ class Helpers
 
         $file_str = file_get_contents($file);
 
-        if (is_array($placeholders) && count($placeholders) > 0) {
+        if (self::is_array_ne($placeholders)) {
             foreach ($placeholders as $key => $val) {
                 $file_str = str_replace('[[+' . $key . ']]', $val, $file_str);
             }
@@ -443,7 +592,7 @@ class Helpers
                     }
                 }
             }
-        } else if (!is_array($array)) {
+        } elseif (!is_array($array)) {
             $output .= '-' . $array . '-';
             $output .= $br;
         }

@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.09
+ * @version 1.10
  */
 namespace mtsapps;
 
@@ -1035,6 +1035,73 @@ class Db
         }
     }
 
+
+    /**
+     * Get ENUM values as an array for a field in a table.
+     *
+     * @param string $table
+     * @param string $field
+     * @return array
+     * @see http://stackoverflow.com/questions/2350052/how-can-i-get-enum-possible-values-in-a-mysql-database#answer-11429272
+     */
+    protected function getEnumValues($table = '', $field = '')
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('table name is invalid', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        if (!Helpers::is_string_ne($field)) {
+            $this->Log->write('field is invalid', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        $this->tableStructure($table);
+
+        if (!in_array($field, $this->table_structure[$table])) {
+            $this->Log->write('field ' . $field . ' is not in table ' . $table, Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+        // end input validation
+
+        // get column definitions for the field of the table
+        $row = $this->query("SHOW COLUMNS FROM {$table} WHERE Field = '{$field}'", 'single');
+
+        if (!$row) {
+            $this->Log->write('error getting result for query', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        if (!array_key_exists('Type', $row)) {
+            $this->Log->write('Type was not found in SHOW COLUMNS', Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        $type = $row['Type'];
+
+        if (preg_match("/^enum\(\'(.*)\'\)$/", $type, $matches)) {
+            // get ENUM values
+            if (isset($matches[1])) {
+                return explode("','", $matches[1]);
+            } else {
+                $this->Log->write('Could not get group of ENUM values', Log::LOG_LEVEL_WARNING);
+
+                return false;
+            }
+        } else {
+            $this->Log->write('Type is not ENUM', Log::LOG_LEVEL_WARNING, $type);
+
+            return false;
+        }
+    }
 
     /**
      * Bind parameters to execute.
