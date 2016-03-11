@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.04
+ * @version 1.05
  */
 
 /** mtsapps namespace */
@@ -342,6 +342,9 @@ abstract class DatabaseMap extends Db
             if (Helpers::is_string_ne($to_table) && Helpers::is_array_ne($to_row)) {
                 $this->to_values[$to_table][] = $to_row;
             }
+
+            // reset current_row so it is no longer accessible
+            $this->current_row = null;
         } // end foreach from_values[from_table]
 
         $result = $from_keys === $to_keys;

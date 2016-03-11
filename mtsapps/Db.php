@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.10
+ * @version 1.11
  */
 namespace mtsapps;
 
@@ -698,6 +698,49 @@ class Db
 
         // get the ID from the table for the name
         return $this->query($sql, $params, 'single');
+    }
+
+
+    /**
+     * Get names (or whichever field is specified) in the given table.
+     *
+     * @param string $table
+     * @param string $field
+     * @param array $where
+     * @return bool|mixed
+     */
+    public function getNames($table = '', $field = 'name', $where = array())
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('invalid entry for table', Log::LOG_LEVEL_WARNING, $table);
+
+            return false;
+        }
+
+        if (!Helpers::is_string_ne($field)) {
+            $this->Log->write('invalid entry for field', Log::LOG_LEVEL_WARNING, $field);
+
+            return false;
+        }
+
+        // build standard query
+        $sql = 'SELECT ' . $field . PHP_EOL;
+        $sql .= '  FROM ' . $table . PHP_EOL;
+
+        $params = array();
+
+        // add WHERE clauses and parameters
+        if (Helpers::is_array_ne($where)) {
+            list($where_sql, $params) = $this->where($where);
+            $sql .= $where_sql;
+        }
+
+        $sql .= '  ORDER BY ' . $field;
+
+        return $this->query($sql, $params, 'flat');
     }
 
 
