@@ -3,7 +3,7 @@
  * Iterator for PDO
  *
  * @author Mike Rodarte
- * @version 1.02
+ * @version 1.03
  */
 
 /**
@@ -42,7 +42,7 @@ class DbIterator implements \Iterator
     /**
      * @var bool
      */
-    private $valid = false;
+    private $valid = true;
 
 
     /**
@@ -64,7 +64,7 @@ class DbIterator implements \Iterator
             $this->Log->write('could not set file properly', Log::LOG_LEVEL_WARNING);
         }
 
-        $this->Log->write('DbIterator::__construct()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (is_object($stmt) && $stmt instanceof \PDOStatement) {
             $this->stmt = $stmt;
@@ -80,7 +80,7 @@ class DbIterator implements \Iterator
      */
     public function current()
     {
-        $this->Log->write('DbIterator::current()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         return $this->result;
     }
@@ -91,7 +91,7 @@ class DbIterator implements \Iterator
      */
     public function key()
     {
-        $this->Log->write('DbIterator::key()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         return $this->key;
     }
@@ -103,7 +103,8 @@ class DbIterator implements \Iterator
      */
     public function next()
     {
-        $this->Log->write('DbIterator::next()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
         $this->key++;
         $this->result = $this->stmt->fetch(\PDO::FETCH_ASSOC, \PDO::FETCH_ORI_ABS, $this->key);
         if (false === $this->result) {
@@ -119,7 +120,8 @@ class DbIterator implements \Iterator
      */
     public function rewind()
     {
-        $this->Log->write('DbIterator::rewind()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
         $this->key = 0;
     }
 
@@ -129,7 +131,7 @@ class DbIterator implements \Iterator
      */
     public function valid()
     {
-        $this->Log->write('DbIterator::valid()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         return $this->valid;
     }

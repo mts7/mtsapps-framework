@@ -3,7 +3,7 @@
  * Helper functions
  *
  * @author Mike Rodarte
- * @version 1.02
+ * @version 1.05
  */
 namespace mtsapps;
 
@@ -141,16 +141,23 @@ class Helpers
             $backup_path = __DIR__;
         }
         // verify the path is valid and has a trailing /
-        $backup_path = realpath($backup_path) . '/';
+        $backup_path = realpath($backup_path) . DIRECTORY_SEPARATOR;
 
         // set the file name to use the database name and current datetime (in case of multiple backups per day)
         $sql_file = $backup_path . $db . date('_Y-m-d_H-i-s') . '.sql';
 
         // build the command
-        $command = "mysqldump -u${user}@${host} -p${pass} ${db} > $sql_file";
+        $command = "mysqldump -u ${user} -h ${host} ";
+        if (self::is_string_ne($pass)) {
+            $command .= "-p${pass} ";
+        }
+        $command .= "${db} -v > $sql_file";
+        if (defined('MYSQL_BIN')) {
+            $command = MYSQL_BIN . $command;
+        }
 
         // execute the command
-        exec($command);
+        exec($command, $output, $status);
 
         // return the size of the sql file (> 0 assumes it was written successfully)
         return filesize($sql_file);
@@ -202,6 +209,17 @@ class Helpers
 
 
     /**
+     * @param string $str
+     */
+    public static function display_now($str = '')
+    {
+        echo self::get_string($str) . "<br />\n";
+        flush();
+        ob_flush();
+    }
+
+
+    /**
      * Calculate the entropy bits of the string itself and the string according to its character set.
      *
      * @param string $string
@@ -234,6 +252,53 @@ class Helpers
             'string' => $self,
             'charset' => $bits,
         );
+    }
+
+
+
+
+    /**
+     * Determine the file, line[, class], and function from the backtrace (with validation).
+     *
+     * @return string
+     */
+    public static function get_call_string()
+    {
+        // get backtrace
+        $bt = debug_backtrace();
+        array_shift($bt);
+
+        // input validation
+        if (!Helpers::is_array_ne($bt)) {
+            return '';
+        }
+        $call_string = '';
+        $caller = array_shift($bt);
+
+        if (Helpers::is_array_ne($caller)) {
+            if (array_key_exists('file', $caller)) {
+                $call_string .= basename($caller['file']);
+            }
+            if (array_key_exists('line', $caller)) {
+                $call_string .= '(' . $caller['line'] . ')';
+            }
+
+            if (Helpers::is_array_ne($bt)) {
+                $class_caller = array_shift($bt);
+                if (Helpers::is_array_ne($class_caller)) {
+                    $call_string .= ' ';
+                    if (array_key_exists('class', $class_caller)) {
+                        $class = substr($class_caller['class'], strrpos($class_caller['class'], '\\') + 1);
+                        $call_string .= $class . '::';
+                    }
+                    if (array_key_exists('function', $class_caller)) {
+                        $call_string .= $class_caller['function'];
+                    }
+                }
+            }
+        }
+
+        return $call_string;
     }
 
 
@@ -307,6 +372,50 @@ class Helpers
 
 
     /**
+     * Get the type and size of a value.
+     *
+     * @param $value
+     * @return string
+     */
+    public static function get_type_size($value)
+    {
+        $type = gettype($value);
+
+        switch($type) {
+            case 'string':
+                $size = strlen($value);
+                break;
+            case 'boolean':
+            case 'resource':
+                $size = 1;
+                break;
+            case 'integer':
+            case 'double':
+                $size = strlen((string) $value);
+                break;
+            case 'array':
+                $size = count($value);
+                break;
+            case 'object':
+                $type = get_class($value);
+                $size = count((array)$value);
+                break;
+            case 'NULL':
+                $size = 0;
+                break;
+            case 'unknown type':
+                $size = -1;
+                break;
+            default:
+                $size = null;
+                break;
+        }
+
+        return $type . '(' . $size . ')';
+    }
+
+
+    /**
      * Check to see if the passed value is an array with a length.
      *
      * @param array $value
@@ -362,7 +471,14 @@ class Helpers
             return false;
         }
 
-        return self::is_valid_int($parts[0], $unsigned) && self::is_valid_int($parts[1], true);
+        $first = self::is_valid_int($parts[0], $unsigned);
+        if (isset($parts[1])) {
+            $second = self::is_valid_int($parts[1], true);
+        } else {
+            $second = true;
+        }
+
+        return $first && $second;
     }
 
 
@@ -378,7 +494,7 @@ class Helpers
         $result = is_int($value) || (is_numeric($value) && (int)$value === $value + 0);
 
         if ($unsigned) {
-            $result = $result >= 0;
+            $result = $result && $value >= 0;
         }
 
         return $result;

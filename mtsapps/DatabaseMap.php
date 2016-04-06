@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.05
+ * @version 1.10
  */
 
 /** mtsapps namespace */
@@ -33,13 +33,17 @@ abstract class DatabaseMap extends Db
     /** @var array $from_values Array indexed by table.field with original values */
     protected $from_values = array();
 
-    /**
-     * @var Log
-     */
-    protected $Log = null;
-
     /** @var array $map Map of table.field to table.field */
     protected $map = array();
+
+    /** @var array $missing_keys Report of values that should be inserted, but are missing from parent tables */
+    protected $missing_keys = array();
+
+    /** @var array $order_by Array indexed by table name with field to use for order */
+    protected $order_by = array();
+
+    /** @var array $table_field_values Array indexed by table name, then field name, containing values that exist */
+    protected $table_field_values = array();
 
     /** @var string $table_separator Used to separate table and field names */
     protected $table_separator = '.';
@@ -50,6 +54,9 @@ abstract class DatabaseMap extends Db
     /** @var array $to_values Array indexed by table.field with original or modified values */
     protected $to_values = array();
 
+    /** @var array $unique_fields Array indexed by table with field names as values */
+    protected $unique_fields = array();
+
 
     /**
      * DatabaseMap constructor.
@@ -59,27 +66,13 @@ abstract class DatabaseMap extends Db
      */
     public function __construct($params = array())
     {
-        if (Helpers::is_array_ne($params) && array_key_exists('log_level', $params)) {
-            $log_level = $params['log_level'];
-        } else {
-            $log_level = Log::LOG_LEVEL_WARNING;
+        if (!array_key_exists('log_level', $params)) {
+            $params['log_level'] = Log::LOG_LEVEL_WARNING;
         }
-        $file = 'db_' . date('Y-m-d') . '.log';
-        $this->Log = new Log([
-            'file' => $file,
-            'log_directory' => LOG_DIR,
-            'log_level' => $log_level,
-        ]);
-        $log_file = $this->Log->file();
-        if ($log_file !== $file) {
-            $this->Log->write('could not set file properly', Log::LOG_LEVEL_WARNING);
-        }
-
-        $this->Log->write('DatabaseMap::__construct()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         parent::__construct($params);
 
-        $this->Log->write('DatabaseMap constructed', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write('done constructing ' . __METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
     }
 
 
@@ -91,7 +84,7 @@ abstract class DatabaseMap extends Db
      */
     public function addMap($map = array())
     {
-        $this->Log->write('DatabaseMap::addMap()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_array_ne($map)) {
@@ -100,12 +93,13 @@ abstract class DatabaseMap extends Db
             return false;
         }
 
+        $this->Log->write('map before merge', Log::LOG_LEVEL_USER, $this->map);
+        $this->Log->write('map argument', Log::LOG_LEVEL_USER, $map);
         // merge contents of map parameter with existing map array
         $this->map = array_merge($this->map, $map);
-        // remove any duplicate key/value pairs from the map
-        $this->map = array_unique($this->map);
+        $this->Log->write('map after merge', Log::LOG_LEVEL_USER, $this->map);
 
-        $this->Log->write('merged map', Log::LOG_LEVEL_WARNING);
+        $this->Log->write('merged map', Log::LOG_LEVEL_USER);
 
         return true;
     }
@@ -124,7 +118,7 @@ abstract class DatabaseMap extends Db
      */
     public function addMapItem($from_table = '', $from_field = '', $to_table = '', $to_field = '')
     {
-        $this->Log->write('DatabaseMap::addMapItem()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!Helpers::is_string_ne($from_table) || !Helpers::is_string_ne($from_field) || !Helpers::is_string_ne($to_table) || !Helpers::is_string_ne($to_field)) {
             $this->Log->write('tables OR fields are invalid', Log::LOG_LEVEL_WARNING);
@@ -152,7 +146,7 @@ abstract class DatabaseMap extends Db
      */
     public function debug($debug = false)
     {
-        $this->Log->write('DatabaseMap::debug()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         $this->debug = !!$debug;
     }
@@ -172,7 +166,7 @@ abstract class DatabaseMap extends Db
      */
     public function process()
     {
-        $this->Log->write('DatabaseMap::process()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // populate $from_tables and $to_tables
         $this->Log->write('populating tables', Log::LOG_LEVEL_USER);
@@ -187,27 +181,42 @@ abstract class DatabaseMap extends Db
 
         // begin loop of map
         foreach ($this->from_tables as $table => $fields) {
+            $order = array_key_exists($table, $this->order_by) ? $this->order_by[$table] : null;
             // get values from table
-            $sql = $this->buildSelect($table, $fields);
-            $this->from_values[$table] = $this->query($sql, null, 'iterator');
+            $sql = $this->buildSelect($table, $fields, $order);
+            $this->from_values[$table] = $this->query($sql, null, 'array');
             // manipulate values
-            $this->buildToValues($table);
+            $result = $this->buildToValues($table);
+            if (!$result) {
+                $this->Log->write('could not build to values from ' . $table, Log::LOG_LEVEL_WARNING);
+            }
         } // end loop
 
         if (!Helpers::is_array_ne($this->to_values)) {
-            $this->Log->write('could not build to values properly', Log::LOG_LEVEL_WARNING);
+            $this->Log->write('could not build to values properly', Log::LOG_LEVEL_WARNING, $this->to_values);
 
             return false;
         }
         $this->Log->write('finished building to values', Log::LOG_LEVEL_USER);
 
-        $this->sortToValuesTables();
+        //$this->sortToValuesTables();
 
         $this->Log->write('inserting values for all to values after sorting', Log::LOG_LEVEL_USER);
-        foreach ($this->to_values as $table => $rows) {
+        foreach ($this->to_values as $table => &$rows) {
+            // map duplicate key values to the unique key values
+            $this->fixDuplicateIds($table, $rows);
+            //Helpers::display_now(date('Y-m-d H:i:s') . ' inserting to table ' . $table);
             $this->insertValues($table);
         }
 
+        if ($this->debug && Helpers::is_array_ne($this->missing_keys)) {
+            Helpers::display_now('Missing Foreign Key IDs');
+            Helpers::display_now($this->missing_keys);
+            Helpers::display_now('Key values');
+            Helpers::display_now($this->table_field_values);
+        }
+
+        //Helpers::display_now(date('Y-m-d H:i:s') . ' executing queue');
         $this->Log->write('executing queue', Log::LOG_LEVEL_USER);
         $this->executeQueue();
 
@@ -227,7 +236,7 @@ abstract class DatabaseMap extends Db
      */
     public function reset()
     {
-        $this->Log->write('DatabaseMap::reset()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         $this->current_row = array();
         $this->from_tables = array();
@@ -262,11 +271,12 @@ abstract class DatabaseMap extends Db
      *
      * @param string $table Table name
      * @param array $fields fields in table
+     * @param string $order_by Field to use to order
      * @return bool|string
      */
-    private function buildSelect($table = '', $fields = array())
+    private function buildSelect($table = '', $fields = array(), $order_by = '')
     {
-        $this->Log->write('DatabaseMap::buildSelect()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($fields)) {
             $this->Log->write('table OR fields is not valid', Log::LOG_LEVEL_WARNING);
@@ -274,9 +284,93 @@ abstract class DatabaseMap extends Db
             return false;
         }
 
-        $sql = 'SELECT ' . implode(', ', $fields) . ' FROM ' . $table;
+        $sql = 'SELECT ' . implode(', ', $fields) . PHP_EOL . '  FROM ' . $table;
+        if (Helpers::is_string_ne($order_by)) {
+            $sql .= PHP_EOL . '  ORDER BY ' . $order_by;
+        }
 
         return $sql;
+    }
+
+
+    /**
+     * Build table field values from keys.
+     *
+     * @param array $relation
+     * @return bool|int
+     * @see DatabaseMap::fixDuplicateIds()
+     */
+    private function buildTableFieldValues($relation = array())
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!Helpers::is_array_ne($relation)) {
+            $this->Log->write('invalid parameter provided', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($relation));
+
+            return false;
+        }
+
+        $values = 0;
+        // check unique values
+        foreach ($relation as $array) {
+            if (!array_key_exists('table', $array)) {
+                continue;
+            }
+
+            if (array_key_exists($array['table'], $this->to_values)) {
+                $temp = $this->to_values[$array['table']];
+                if (!Helpers::is_array_ne($temp)) {
+                    $this->Log->write('could not get to values for ' . $array['table'], Log::LOG_LEVEL_WARNING);
+                    continue;
+                }
+
+                $keys = array('primary', 'unique', 'foreign');
+                $fields = array();
+                foreach ($keys as $key) {
+                    $stuff = $this->getKeyField($array['table'], $key);
+                    if (Helpers::is_array_ne($stuff)) {
+                        $fields = array_merge($fields, $stuff);
+                    }
+                }
+            } else {
+                $temp = $this->getKeyValues($array['table']);
+                if ($temp === false) {
+                    $this->Log->write('could not get key values for ' . $array['table'], Log::LOG_LEVEL_WARNING);
+                    continue;
+                }
+
+                $first = current($temp);
+                $fields = array_keys($first);
+            }
+
+            // make sure there is an array set up for this table
+            if (!array_key_exists($array['table'], $this->table_field_values)) {
+                $this->table_field_values[$array['table']] = array();
+            }
+            // make sure there is an array set up for each field in this table
+            foreach ($fields as $f) {
+                if (!array_key_exists($f, $this->table_field_values[$array['table']])) {
+                    $this->table_field_values[$array['table']][$f] = array();
+                }
+            }
+
+            // loop through each row and assign the values of the fields to the array
+            foreach ($temp as $row) {
+                foreach ($row as $f => $v) {
+                    if (!in_array($f, $fields)) {
+                        continue;
+                    }
+                    if (!in_array($v, $this->table_field_values[$array['table']][$f])) {
+                        $this->table_field_values[$array['table']][$f][] = $v;
+                        $values++;
+                        sort($this->table_field_values[$array['table']][$f]);
+                    }
+                }
+            }
+        }
+
+        return $values;
     }
 
 
@@ -292,7 +386,7 @@ abstract class DatabaseMap extends Db
      */
     private function buildToValues($from_table = '')
     {
-        $this->Log->write('DatabaseMap::buildToValues()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_array_ne($this->from_values[$from_table])) {
@@ -307,9 +401,14 @@ abstract class DatabaseMap extends Db
 
         // loop through values and rows to transition values
         foreach ($this->from_values[$from_table] as $row) {
+            if (!Helpers::is_array_ne($row)) {
+                continue;
+            }
+
             $this->current_row = $row;
             $to_row = array();
             $to_table = '';
+            $skip = false;
 
             // loop through row to get fields and values set up properly
             foreach ($row as $field => $value) {
@@ -317,30 +416,50 @@ abstract class DatabaseMap extends Db
                 $from_key = $from_table . $this->table_separator . $field;
                 $from_keys++;
                 if (!array_key_exists($from_key, $this->map)) {
-                    $this->Log->write('could not find ' . $from_key . ' in map', Log::LOG_LEVEL_WARNING);
-                    continue;
+                    $this->Log->write('could not find ' . $from_key . ' in map', Log::LOG_LEVEL_USER);
+                    $skip = true;
+                    break;
                 }
 
                 // transition the value to what the to table needs
                 $to_value = $this->transitionValue($from_key, $value);
 
                 if (false === $to_value) {
-                    // from key must not be a string
-                    $this->Log->write('skipping ' . $from_key, Log::LOG_LEVEL_WARNING);
-                    continue;
+                    // from key must be invalid
+                    $this->Log->write('skipping ' . $from_key, Log::LOG_LEVEL_USER, $value);
+                    $skip = true;
+                    break;
                 }
 
                 // get to table and field from from key
                 $to_keys++;
-                list($to_table, $to_field) = $this->getToTable($from_key);
+                $result = $this->getToTable($from_key);
+                if (!$result) {
+                    $this->Log->write('could not determine table from ' . $from_key, Log::LOG_LEVEL_WARNING);
+                    $skip = true;
+                    break;
+                }
+                list($to_table, $to_field) = $result;
 
                 // assign value to row[field]
                 $to_row[$to_field] = $to_value;
             } // end foreach row
 
+            if ($skip) {
+                $this->Log->write('skipping row', Log::LOG_LEVEL_USER, $this->current_row);
+                $this->current_row = null;
+                continue;
+            }
+
+            if (!array_key_exists('add_date', $to_row)) {
+                $to_row['add_date'] = date('Y-m-d H:i:s');
+            }
+
             // add the new to row to the to values array, indexed by to table
             if (Helpers::is_string_ne($to_table) && Helpers::is_array_ne($to_row)) {
                 $this->to_values[$to_table][] = $to_row;
+            } else {
+                $this->Log->write('to_table is a ' . Helpers::get_type_size($to_table) . ' and to_row is a ' . Helpers::get_type_size($to_row), Log::LOG_LEVEL_WARNING);
             }
 
             // reset current_row so it is no longer accessible
@@ -356,6 +475,162 @@ abstract class DatabaseMap extends Db
 
 
     /**
+     * Removes duplicate rows (based on UNIQUE key), tracks duplicated IDs, and maps duplicate IDs to unique IDs.
+     *
+     * @param string $table To table name
+     * @param array $rows All rows from the table that need to be inserted
+     * @return bool
+     * @uses Db::getKeyField()
+     * @uses $GLOBALS['table_relationships']
+     * @uses DatabaseMap::$unique_fields
+     * @uses Db::getIdFromName()
+     * @see  Relationship::build()
+     */
+    private function fixDuplicateIds($table = '', &$rows = array())
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('table is invalid', Log::LOG_LEVEL_WARNING, $table);
+
+            return false;
+        }
+        if (!Helpers::is_array_ne($rows)) {
+            $this->Log->write('array is invalid', Log::LOG_LEVEL_WARNING, $rows);
+
+            return false;
+        }
+
+        // get this table's unique fields
+        $unique_fields = $this->getKeyField($table, 'unique');
+
+        // prepare unique array based on $unique_fields (which might be empty)
+        $unique = array();
+        foreach ($unique_fields as $field) {
+            $unique[$field] = array();
+        }
+
+        // get relationships for $table as child table
+        if (array_key_exists($table, $GLOBALS['table_relationships'])) {
+            $relation = $GLOBALS['table_relationships'][$table];
+
+            $result = $this->buildTableFieldValues($relation);
+            if ($result === false) {
+                $this->Log->write('Could not get values from relations', Log::LOG_LEVEL_WARNING, $relation);
+            } elseif ($result === 0) {
+                $this->Log->write('Found no values from relations', Log::LOG_LEVEL_WARNING, $relation);
+            } else {
+                $this->Log->write('Found values', Log::LOG_LEVEL_USER, $result);
+            }
+        }
+
+        // TODO: unsure where this goes: make sure unique columns (foreign keys) have the proper values when reassigned
+
+        // fix the rows
+        foreach ($rows as $index => &$row) {
+            // check for duplicate rows
+            foreach ($unique_fields as $field) {
+                $value = $row[$field];
+                $existing_id = $this->getIdFromName($table, $value, $field);
+                if (Helpers::is_valid_int($existing_id) && $existing_id > 0) {
+                    // consider unique values already in the database table
+                    $unique[$field][$value][] = $existing_id;
+                    unset($rows[$index]);
+                    continue 2;
+                } elseif (array_key_exists($value, $unique[$field])) {
+                    // remove rows that would duplicate unique values
+                    $unique[$field][$value][] = $row['id'];
+                    unset($rows[$index]);
+                    continue 2;
+                } else {
+                    // this is the first instance of this value, so build list for future mapping of IDs
+                    $unique[$field][$value] = array();
+                }
+            }
+
+            // check relationships in order to change parent IDs in rows to use actual parent ID values (after removing duplicates)
+            if (isset($relation)) {
+                // loop through relations to find parent tables for the child fields
+                foreach ($relation as $field => $array) {
+                    // make sure the child field exists in the row
+                    if (!array_key_exists($field, $row)) {
+                        continue;
+                    }
+
+                    // make sure this parent table exists in unique fields
+                    $relation_table = $relation[$field]['table'];
+                    if (!array_key_exists($relation_table, $this->unique_fields)) {
+                        continue;
+                    }
+
+                    // check for the current row's parent ID in the unique_fields for the parent table
+                    $current_id = $row[$field];
+                    $use_value = null;
+                    $use_field = null;
+                    foreach ($this->unique_fields[$relation_table] as $unique_field => $values) {
+                        foreach ($values as $value => $ids) {
+                            // get the field and value used for this parent ID to use later
+                            if (in_array($current_id, $ids)) {
+                                $use_value = $value;
+                                $use_field = $unique_field;
+                                break 2;
+                            }
+                        }
+                    }
+                    // make sure there is a value to use to proceed
+                    if ($use_value === null) {
+                        continue;
+                    }
+
+                    // get the actual parent ID for the field and value that were found earlier
+                    $use_id = $this->getIdFromName($relation[$field]['table'], $use_value, $use_field);
+                    if (!Helpers::is_valid_int($use_id) || $use_id === 0) {
+                        $this->Log->write('could not get ID from ' . $relation[$field]['table'] . ' for ' . $use_value, Log::LOG_LEVEL_WARNING);
+                        continue;
+                    }
+
+                    // update the row to use the actual parent ID for the value (like find and replace)
+                    $row[$field] = $use_id;
+
+                    // TODO: check for existence of key field value before allowing it to be inserted (in order to avoid foreign
+                    // TODO:     key constraint violations) and generate a report of the rows that would have failed
+                    if (!in_array($use_id, $this->table_field_values[$array['table']][$array['field']])) {
+                        $this->missing_keys[$array['table']][$array['field']][] = $use_id;
+                        $this->missing_keys[$array['table']][$array['field']] = array_unique($this->missing_keys[$array['table']][$array['field']]);
+                        sort($this->missing_keys[$array['table']][$array['field']]);
+
+                        //unset($rows[$index]);
+                    }
+                }
+            }
+        }
+
+        // TODO: sort by either first field, id field, or specified field in parameters
+        usort($rows, function ($a, $b) {
+            if (array_key_exists('id', $a) && array_key_exists('id', $b)) {
+                $id_field = 'id';
+                $id_field_a = $id_field;
+                $id_field_b = $id_field;
+            } else {
+                // get first key
+                $keys = array_keys($a);
+                $id_field_a = $keys[0];
+                $keys = array_keys($b);
+                $id_field_b = $keys[0];
+            }
+
+            return $a[$id_field_a] > $b[$id_field_b];
+        });
+
+        // save any values from $unique to the unique fields array to use in the loop above
+        $this->unique_fields[$table] = $unique;
+
+        return true;
+    }
+
+
+    /**
      * Parse values in map and add to corresponding table array.
      *
      * @return bool
@@ -366,7 +641,7 @@ abstract class DatabaseMap extends Db
      */
     private function getTables()
     {
-        $this->Log->write('DatabaseMap::getTables()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (empty($this->map)) {
@@ -375,7 +650,14 @@ abstract class DatabaseMap extends Db
             return false;
         }
 
+        $this->Log->write('looping through $this->map', Log::LOG_LEVEL_USER, $this->map);
         foreach ($this->map as $from => $to) {
+            $this->Log->write('from', Log::LOG_LEVEL_USER, $from);
+            $this->Log->write('to', Log::LOG_LEVEL_USER, $to);
+            if ($to === 'skip') {
+                $this->Log->write('skipping this one', Log::LOG_LEVEL_USER);
+                continue;
+            }
             list($from_table, $from_field) = explode($this->table_separator, $from);
             list($to_table, $to_field) = explode($this->table_separator, $to);
 
@@ -397,6 +679,7 @@ abstract class DatabaseMap extends Db
                 }
             }
         }
+        $this->Log->write('finished looping through $this->map', Log::LOG_LEVEL_USER);
 
         return true;
     }
@@ -410,7 +693,7 @@ abstract class DatabaseMap extends Db
      */
     private function getToTable($from_key = '')
     {
-        $this->Log->write('DatabaseMap::getToTable()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!array_key_exists($from_key, $this->map)) {
@@ -418,6 +701,7 @@ abstract class DatabaseMap extends Db
 
             return false;
         }
+        $this->Log->write('map[from_key]', Log::LOG_LEVEL_USER, $this->map[$from_key]);
 
         return explode($this->table_separator, $this->map[$from_key]);
     }
@@ -436,7 +720,7 @@ abstract class DatabaseMap extends Db
      */
     private function insertValues($table = '')
     {
-        $this->Log->write('DatabaseMap::insertValues()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($this->to_values[$table])) {
@@ -447,22 +731,25 @@ abstract class DatabaseMap extends Db
 
         // get values for table
         $values = $this->to_values[$table];
-        // make sure add date is set
-        $values['add_date'] = date('Y-m-d H:i:s');
+
         // build insert query and parameters
-        list($sql, $parameters) = $this->buildInsert($table, $values, true);
+        $result = $this->buildInsert($table, $values, true, true);
+        if ($result === false) {
+            $this->Log->write('could not build insert for ' . $table, Log::LOG_LEVEL_WARNING);
+
+            return false;
+        }
+
+        list($sql, $parameters) = $result;
 
         $this->Log->write('trying insert query in transaction', Log::LOG_LEVEL_USER);
         $this->begin();
         $this->query($sql, $parameters, 'insert');
 
         if ($this->debug) {
-            $this->Log->write('rolling back transaction, due to debug', Log::LOG_LEVEL_USER);
+            $this->Log->write('rolling back transaction due to debug', Log::LOG_LEVEL_USER);
             $this->rollback();
-            ob_start();
-            echo $sql . PHP_EOL;;
-            print_r($parameters);
-            $output = ob_get_flush();
+            $output = $sql . PHP_EOL . Helpers::get_string($parameters);
         } else {
             $this->Log->write('committing transaction', Log::LOG_LEVEL_USER);
             $this->commit();

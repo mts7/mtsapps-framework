@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.01
+ * @version 1.02
  */
 
 /**
@@ -170,7 +170,7 @@ class Login extends Db
         $sql .= '  WHERE user_id = ?' . PHP_EOL;
         $sql .= '  ORDER BY add_date DESC' . PHP_EOL;
 
-        $rows = $this->query($sql, array($user_id), 'array');
+        $rows = $this->query($sql, array($user_id), 'iterator');
         $this->Log->write('found ' . count($rows) . ' rows', Log::LOG_LEVEL_USER);
 
         return $rows;

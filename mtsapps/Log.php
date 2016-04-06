@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.09
+ * @version 1.12
  */
 
 /**
@@ -124,6 +124,7 @@ class Log
      * Write the exception data to the log.
      *
      * @param \Exception $ex
+     * @param mixed $extra
      * @return bool|int
      * @uses \Exception::getMessage()
      * @uses \Exception::getFile()
@@ -132,7 +133,7 @@ class Log
      * @uses \Exception::getTraceAsString()
      * @uses Log::write()
      */
-    public function exception(\Exception $ex)
+    public function exception(\Exception $ex, $extra = null)
     {
         // input validation
         if (!is_object($ex)) {
@@ -151,13 +152,20 @@ class Log
         $error = $type . ' error ' . $code . ' in ' . $file . ' on line ' . $line . PHP_EOL;
         $error .= $message . PHP_EOL;
 
+        if (defined('DISPLAY_ERRORS') && DISPLAY_ERRORS) {
+            Helpers::display_now($error . "<br />\n");
+            if (!empty($extra)) {
+                Helpers::display_now($extra);
+            }
+        }
+
         // add the trace if the log level is appropriate
         if ($this->log_level >= Log::LOG_LEVEL_WARNING) {
             $error .= $trace . PHP_EOL;
         }
 
         // write the exception error message to the log
-        return $this->write($error, Log::LOG_LEVEL_ERROR);
+        return $this->write($error, Log::LOG_LEVEL_ERROR, $extra);
     }
 
 
@@ -173,7 +181,7 @@ class Log
         $args = func_get_args();
         if (count($args) > 0 && Helpers::is_string_ne($args[0])) {
             $this->file = $args[0];
-        } else {
+        } elseif (!Helpers::is_string_ne($this->file)) {
             $this->file = $this->default_file;
         }
 
@@ -201,7 +209,7 @@ class Log
         $args = func_get_args();
         if (count($args) > 0) {
             if (Helpers::is_string_ne($args[0]) && is_dir(realpath($args[0]))) {
-                $this->log_directory = realpath($args[0]) . '/';
+                $this->log_directory = realpath($args[0]) . DIRECTORY_SEPARATOR;
             } else {
                 $this->write('invalid log directory', Log::LOG_LEVEL_WARNING, $args[0]);
             }
@@ -221,7 +229,7 @@ class Log
     {
         // set the log level if the parameter is valid
         $args = func_get_args();
-        if (count($args) > 0) {
+        if (count($args) === 1) {
             if (Helpers::is_valid_int($args[0]) && $this->validateLevel($args[0])) {
                 $this->log_level = $args[0];
             } else {
@@ -283,7 +291,11 @@ class Log
         }
 
         if ($this->log_level <= $log_level && Helpers::is_string_ne($this->file)) {
-            $message = date($this->date_format) . $this->separator . $message;
+            // get call string from backtrace
+            $call_string = Helpers::get_call_string();
+
+            // build the message
+            $message = date($this->date_format) . $this->separator . $call_string . $this->separator . $message;
             $this->messages[] = $message;
 
             // write the message to the provided log file

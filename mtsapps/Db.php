@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.11
+ * @version 1.16
  */
 namespace mtsapps;
 
@@ -38,6 +38,16 @@ class Db
     private $host = '';
 
     /**
+     * @var array
+     */
+    private $key_values = array();
+
+    /**
+     * @var string
+     */
+    private $last_query = '';
+
+    /**
      * @var Log
      */
     protected $Log = null;
@@ -46,6 +56,16 @@ class Db
      * @var int
      */
     protected $log_level = 0;
+
+    /**
+     * @var int
+     */
+    private $max_inserts = 500;
+
+    /**
+     * @var array
+     */
+    public $named_ids = array();
 
     /**
      * @var string
@@ -85,7 +105,6 @@ class Db
      */
     public function __construct($params = array())
     {
-        $file = 'db_' . date('Y-m-d') . '.log';
         if (Helpers::is_array_ne($params) && array_key_exists('log_level', $params)) {
             $log_level = $params['log_level'];
         } else {
@@ -95,6 +114,11 @@ class Db
             $log_directory = $params['log_directory'];
         } else {
             $log_directory = LOG_DIR;
+        }
+        if (Helpers::is_array_ne($params) && array_key_exists('log_file', $params)) {
+            $file = $params['log_file'];
+        } else {
+            $file = 'db_' . date('Y-m-d') . '.log';
         }
         $this->Log = new Log([
             'file' => $file,
@@ -146,7 +170,7 @@ class Db
      */
     public function __destruct()
     {
-        $this->Log->write('Db::__destruct()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
         $this->disconnect();
         $this->Log->write('disconnected', Log::LOG_LEVEL_SYSTEM_INFORMATION);
     }
@@ -157,9 +181,15 @@ class Db
      */
     private function connect()
     {
-        $this->Log->write('Db::connect()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         try {
+            if (!Helpers::is_string_ne($this->user)) {
+                $this->Log->write('Cannot connect to database without a user name provided.', Log::LOG_LEVEL_ERROR);
+
+                throw new \Exception('Cannot connect to database without a user name provided.');
+            }
+
             if (strlen($this->host) == 0 || strlen($this->dbname) == 0) {
                 $this->Log->write('Host OR database variables are empty', Log::LOG_LEVEL_WARNING);
                 die();
@@ -168,6 +198,10 @@ class Db
             $this->dbh = new \PDO($connection_string, $this->user, $this->pass);
             $this->dbh->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         } catch (\PDOException $e) {
+            $this->exception = $e;
+            $this->Log->exception($e);
+            die();
+        } catch (\Exception $e) {
             $this->exception = $e;
             $this->Log->exception($e);
             die();
@@ -180,7 +214,7 @@ class Db
      */
     private function disconnect()
     {
-        $this->Log->write('Db::disconnect()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
         $this->dbh = null;
     }
 
@@ -196,7 +230,7 @@ class Db
      */
     public function enqueue($sql = '', $parameters = array(), $return_type = null)
     {
-        $this->Log->write('Db::enqueue()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
         $queue_length = count($this->queue);
         $this->Log->write('original queue length', Log::LOG_LEVEL_USER, $queue_length);
         $this->queue[] = array(
@@ -220,7 +254,7 @@ class Db
      */
     public function executeQueue()
     {
-        $this->Log->write('Db::executeQueue()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!Helpers::is_array_ne($this->queue)) {
             $this->Log->write('queue is empty', Log::LOG_LEVEL_WARNING);
@@ -230,7 +264,9 @@ class Db
 
         $results = array();
         foreach ($this->queue as $array) {
+            $this->begin();
             $results[] = call_user_func_array(array($this, 'query'), $array);
+            $this->commit();
         }
         $this->Log->write('found ' . count($results) . ' query results', Log::LOG_LEVEL_USER);
 
@@ -251,7 +287,7 @@ class Db
      */
     public function query($sql = '', $parameters = array(), $return_type = null)
     {
-        $this->Log->write('Db::query()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($sql)) {
@@ -268,6 +304,7 @@ class Db
             } else {
                 $this->stmt = $this->dbh->prepare($sql);
             }
+            $this->last_query = $sql;
         } catch (\PDOException $ex) {
             $this->exception = $ex;
             $this->Log->exception($ex);
@@ -286,7 +323,7 @@ class Db
             return false;
         }
 
-        if (!is_array($parameters)) {
+        if (!Helpers::is_array_ne($parameters)) {
             $this->Log->write('parameters is empty', Log::LOG_LEVEL_USER);
             $parameters = null;
         } else {
@@ -294,17 +331,20 @@ class Db
         }
 
         try {
+            $this->writeQueryParameters($sql, $parameters);
             $executed = $this->stmt->execute();
         } catch (\PDOException $ex) {
             $this->exception = $ex;
             $this->rollback();
             $this->Log->exception($ex);
+            $this->writeQueryParameters(wordwrap('/* ' . $ex->getMessage() . ' */', 120, PHP_EOL . ' * '), null);
 
             return false;
         } catch (\Exception $ex) {
             $this->exception = $ex;
             $this->rollback();
             $this->Log->exception($ex);
+            $this->writeQueryParameters(wordwrap('/* ' . $ex->getMessage() . ' */', 120, PHP_EOL . ' * '), null);
 
             return false;
         }
@@ -327,6 +367,7 @@ class Db
             case 'single':
                 $row = $this->stmt->fetch(\PDO::FETCH_NUM);
                 $result = $row[0];
+                $this->writeQueryParameters('/* ' . $result . ' */');
                 break;
             case 'first':
                 $result = $this->stmt->fetch(\PDO::FETCH_ASSOC);
@@ -357,10 +398,12 @@ class Db
                 break;
             case 'insert':
                 $result = $this->dbh->lastInsertId();
+                $this->writeQueryParameters('/* ' . $result . ' */');
                 break;
             case 'update':
             case 'delete':
                 $result = $this->stmt->rowCount() > 0;
+                $this->writeQueryParameters('/* ' . $result . ' */');
                 break;
             case 'iterator':
                 $result = new DbIterator($this->stmt);
@@ -383,25 +426,38 @@ class Db
      * @param string $table Table name
      * @param array $pairs Either pairs of values (a single row) or multiple rows
      * @param bool|false $multiple_rows Flag for if using rows or row for $pairs
+     * @param bool $placeholders Use placeholders (true) or use values (false)
+     * @param bool $ignore Use INSERT IGNORE
      * @return array|bool
      */
-    public function buildInsert($table = '', $pairs = array(), $multiple_rows = false)
+    public function buildInsert($table = '', $pairs = array(), $multiple_rows = false, $placeholders = true, $ignore = false)
     {
-        $this->Log->write('Db::buildInsert()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
-            $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
+        if (!Helpers::is_string_ne($table) || (!Helpers::is_array_ne($pairs) && !($pairs instanceof DbIterator))) {
+            $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($table) . ', ' . Helpers::get_type_size($pairs));
 
             return false;
         }
 
         $this->Log->write('multiple_rows', Log::LOG_LEVEL_USER, $multiple_rows);
 
-        $sql = 'INSERT INTO ' . $table . PHP_EOL;
+        $sql = 'INSERT ';
+        if (!!$ignore) {
+            $sql .= 'IGNORE ';
+        }
+        $sql .= 'INTO ' . $table . PHP_EOL;
         if ($multiple_rows === true) {
             $fields = array();
             $values = array();
-            foreach ($pairs as $row) {
+            $insert_sql = $sql;
+            foreach ($pairs as $key => $row) {
+                if (!Helpers::is_array_ne($row)) {
+                    $this->Log->write('row from pairs is not an array, but is ' . Helpers::get_type_size($row), Log::LOG_LEVEL_WARNING, $row);
+
+                    continue;
+                }
+
                 // make sure add_date is present
                 if (!array_key_exists('add_date', $row)) {
                     $row['add_date'] = date('Y-m-d H:i:s');
@@ -418,15 +474,43 @@ class Db
                 return false;
             }
 
-            $sql .= '  (' . implode(',', $fields) . ')' . PHP_EOL;
-            $sql .= '  VALUES' . PHP_EOL;
-            foreach ($values as $key => $array) {
-                $sql .= '  (' . implode(', ', array_fill(0, count($array), '?')) . '),' . PHP_EOL;
+            $insert_sql .= '  (' . implode(', ', $fields) . ')' . PHP_EOL;
+            $insert_sql .= '  VALUES' . PHP_EOL;
+            $sql = $insert_sql;
+            if ($placeholders) {
+                $counter = 0;
+                foreach ($values as $key => $array) {
+                    $counter++;
+                    if ($counter === $this->max_inserts) {
+                        $sql = rtrim($sql, ',' . PHP_EOL) . ';' . PHP_EOL . PHP_EOL;
+                        $sql .= $insert_sql;
+                        $counter = 1;
+                    }
+                    $sql .= '  (' . implode(', ', array_fill(0, count($array), '?')) . '),' . PHP_EOL;
+                }
+                // get all values into one array (to pass as parameters for placeholders)
+                $values = Helpers::array_flatten($values);
+            } else {
+                foreach ($values as $key => $array) {
+                    $sql .= '  (';
+                    foreach ($array as $index => $value) {
+                        if (is_array($value)) {
+                            Helpers::display_now('values multiple');
+                            Helpers::display_now($values);
+                            break;
+                        }
+                        $sql .= $this->quoteField($table, $fields[$index], $value) . ', ';
+                    }
+                    $sql = substr($sql, 0, -2);
+                    $sql .= '),' . PHP_EOL;
+                }
             }
-            $sql = substr($sql, 0, -2);
-            // get all values into one array (to pass as parameters for placeholders)
-            $values = Helpers::array_flatten($values);
         } else {
+            if (!Helpers::is_array_ne($pairs)) {
+                $this->Log->write('pairs is not an array, but is ' . Helpers::get_type_size($pairs), Log::LOG_LEVEL_WARNING, $pairs);
+
+                return false;
+            }
             $fields = array_keys($pairs);
             $values = array_values($pairs);
 
@@ -442,10 +526,21 @@ class Db
                 $fields[] = 'add_date';
             }
 
-            $sql .= '  (' . implode(',', $fields) . ')' . PHP_EOL;
+            $sql .= '  (' . implode(', ', $fields) . ')' . PHP_EOL;
             $sql .= '  VALUES' . PHP_EOL;
-            $sql .= '  (' . implode(', ', array_fill(0, count($values), '?')) . ')' . PHP_EOL;
+            if ($placeholders) {
+                $sql .= '  (' . implode(', ', array_fill(0, count($values), '?')) . ')' . PHP_EOL;
+            } else {
+                $sql .= '  (';
+                foreach ($values as $index => $value) {
+                    $sql .= $this->quoteField($table, $fields[$index], $value) . ', ';
+                }
+                $sql = substr($sql, 0, -2);
+                $sql .= ')' . PHP_EOL;
+            }
         }
+        $sql = rtrim($sql, ',' . PHP_EOL);
+
         $this->Log->write('have sql and ' . count($values) . ' values', Log::LOG_LEVEL_USER);
         $this->Log->write('sql', Log::LOG_LEVEL_USER, $sql);
 
@@ -462,7 +557,7 @@ class Db
      */
     public function buildUpdate($table = '', $pairs = array())
     {
-        $this->Log->write('Db::buildUpdate()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
@@ -472,11 +567,11 @@ class Db
         }
 
         // build SQL
-        $sql = 'UPDATE ' . $table;
+        $sql = 'UPDATE ' . $table . PHP_EOL;
         $sql .= '  SET ';
-        $glue = ' = ?,' . PHP_EOL;
-        $sql .= implode($glue, $pairs) . $glue;
-        $sql = substr($sql, 0, -2);
+        $glue = ' = ?,' . PHP_EOL . '    ';
+        $sql .= implode($glue, array_keys($pairs)) . $glue;
+        $sql = rtrim($sql, ', ' . PHP_EOL);
         $this->Log->write('have sql and pairs', Log::LOG_LEVEL_USER);
 
         return array($sql, array_values($pairs));
@@ -516,7 +611,7 @@ class Db
      */
     public function export($tables = array())
     {
-        $this->Log->write('Db::export()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // make sure there are tables to use
         if (!Helpers::is_array_ne($tables)) {
@@ -542,8 +637,10 @@ class Db
         foreach ($tables as $table) {
             $sql = 'SELECT *';
             $sql .= '  FROM `' . $table . '`';
-            $rows = $this->query($sql, array(), 'iterator');
-            $output = $this->buildInsert($table, $rows);
+            $rows = $this->query($sql, array(), 'array');
+            $output = 'TRUNCATE TABLE ' . $table . ';' . PHP_EOL;
+            list($sql,) = $this->buildInsert($table, $rows, true, false);
+            $output .= $sql . ';' . PHP_EOL;
             $this->writeFile($this->dump_file, $output);
         }
 
@@ -561,7 +658,7 @@ class Db
      */
     public function exception()
     {
-        $this->Log->write('Db::exception()');
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         return $this->exception;
     }
@@ -626,7 +723,7 @@ class Db
      */
     public function get($table = '', $order_by = 'id', $id = null)
     {
-        $this->Log->write('Db::get()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($table)) {
@@ -665,39 +762,154 @@ class Db
      *
      * @param string $table Table name for SELECT
      * @param string $name Name of the value
-     * @param array $where_fields List of fields to compare with $name
+     * @param array| $where_fields List of fields or exact field name to compare with $name
      * @param string $id_field ID field in table to return (typically id)
-     * @return mixed|null
+     * @return int
      */
     public function getIdFromName($table = '', $name = '', $where_fields = array(), $id_field = 'id')
     {
-        $this->Log->write('Db::getIdFromName()');
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($table) || !Helpers::is_string_ne($name)) {
             $this->Log->write('table OR name is empty', Log::LOG_LEVEL_WARNING);
 
-            return null;
+            return 0;
+        }
+
+        // check for cached value
+        if (array_key_exists($table, $this->named_ids)) {
+            if (array_key_exists($name, $this->named_ids[$table])) {
+                $id = $this->named_ids[$table][$name];
+                if (Helpers::is_valid_int($id, true)) {
+                    $this->Log->write('found ' . $id . ' in cache', Log::LOG_LEVEL_USER);
+
+                    return $id;
+                }
+            }
         }
 
         // build SELECT query
-        $sql = 'SELECT ' . $id_field . ' FROM ' . $table . ' WHERE name = ?';
+        $sql = 'SELECT ' . $id_field . PHP_EOL . '  FROM ' . $table . PHP_EOL;
 
         // prepare parameters to send, including $name as the first parameter
         $params = array();
         $params[] = $name;
 
         // add any additional fields to WHERE to compare with $name
-        if (Helpers::is_array_ne($where_fields)) {
+        if (Helpers::is_string_ne($where_fields)) {
+            $sql .= '  WHERE ' . $where_fields . ' = ?';
+        } elseif (Helpers::is_array_ne($where_fields)) {
+            $sql .= '  WHERE name = ? ' . PHP_EOL;
             foreach ($where_fields as $field) {
-                $sql .= ' OR ' . $field . ' = ?';
+                $sql .= '    OR ' . $field . ' = ?';
                 $params[] = $name;
             }
+        } else {
+            $sql .= '  WHERE name = ?';
         }
         $this->Log->write('built sql and parameters', Log::LOG_LEVEL_USER);
 
         // get the ID from the table for the name
-        return $this->query($sql, $params, 'single');
+        $id = $this->query($sql, $params, 'single');
+
+        if (Helpers::is_valid_int($id, true)) {
+            $this->named_ids[$table][$name] = (int)$id;
+
+            return (int)$id;
+        } else {
+            return 0;
+        }
+    }
+
+
+    /**
+     * Get fields with a corresponding key type.
+     *
+     * @param string $table
+     * @param string $key primary|foreign|unique
+     * @return array|bool
+     * @uses Db::tableStructure()
+     */
+    public function getKeyField($table = '', $key = 'primary')
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('invalid entry for table', Log::LOG_LEVEL_WARNING, $table);
+
+            return false;
+        }
+
+        // get table structure
+        $structure = $this->tableStructure($table);
+
+        $fields = array();
+        foreach ($structure as $field => $attrs) {
+            // look for key type in attributes for field
+            if ($attrs['key'] === $key) {
+                $fields[] = $field;
+            }
+        }
+
+        return $fields;
+    }
+
+
+    /**
+     * Get values from key fields in a table.
+     *
+     * @param string $table
+     * @param bool $force Force the cached value to update
+     * @return bool|mixed
+     */
+    public function getKeyValues($table = '', $force = false)
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('table is invalid', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($table));
+
+            return false;
+        }
+
+        // check the cache
+        if (array_key_exists($table, $this->key_values) && !$force) {
+            $this->Log->write('using cached values for ' . $table, Log::LOG_LEVEL_USER);
+
+            return $this->key_values[$table];
+        }
+
+        // set keys to use
+        $keys = array('primary', 'unique', 'foreign');
+
+        // get key fields
+        $key_fields = array();
+        foreach ($keys as $key) {
+            $key_fields = array_merge($key_fields, $this->getKeyField($table, $key));
+        }
+
+        // build SQL SELECT query
+        $field_list = implode(', ', $key_fields);
+        $sql = 'SELECT ' . $field_list . PHP_EOL;
+        $sql .= '  FROM ' . $table . PHP_EOL;
+        $sql .= '  ORDER BY ' . $field_list;
+
+        // get values for key fields
+        $values = $this->query($sql, null, 'array');
+
+        if (!Helpers::is_array_ne($values)) {
+            $this->Log->write('no results or invalid query', Log::LOG_LEVEL_WARNING, array('sql' => $sql, 'values' => $values));
+
+            return false;
+        }
+
+        // cache by table
+        $this->key_values[$table] = $values;
+
+        return $values;
     }
 
 
@@ -753,7 +965,7 @@ class Db
      */
     public function import($sql = '')
     {
-        $this->Log->write('Db::import()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($sql)) {
@@ -788,7 +1000,7 @@ class Db
      */
     public function insert($table = '', $pairs = array(), $enqueue = false)
     {
-        $this->Log->write('Db::insert()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
@@ -848,43 +1060,99 @@ class Db
      */
     public function quote($value = '', $type = 'string')
     {
-        $this->Log->write('Db::quote()');
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (empty($value)) {
-            $this->Log->write('value is empty', Log::LOG_LEVEL_WARNING);
+        $this->Log->write('type', Log::LOG_LEVEL_USER, $type);
+
+        if (!Helpers::is_string_ne($type)) {
+            $type = gettype($value);
+            $this->Log->write('set type to ' . $type . ' for value', Log::LOG_LEVEL_USER, $value);
+        }
+
+        if ($type === 'string') {
+            if (Helpers::is_valid_decimal($value)) {
+                $type = 'decimal';
+            } elseif (Helpers::is_valid_int($value)) {
+                $type = 'int';
+            } elseif (is_bool($value)) {
+                $type = 'bool';
+            }
+        }
+
+        if (!(in_array($type, array('int', 'integer', 'decimal')) && ($value == 0 || $value === null)) && empty($value)) {
+            $this->Log->write('value is empty', Log::LOG_LEVEL_USER);
 
             return "''";
         }
 
-        $this->Log->write('type', Log::LOG_LEVEL_USER, $type);
-
         switch ($type) {
             case 'int':
+            case 'integer':
                 if (Helpers::is_valid_int($value)) {
                     return $value;
+                } else {
+                    return 0;
                 }
                 break;
             case 'decimal':
+            case 'double':
+            case 'float':
                 if (Helpers::is_valid_decimal($value)) {
                     return $value;
+                } else {
+                    return 0.00;
                 }
                 break;
             case 'bool':
-                return !!$value;
+            case 'boolean':
+                return !!$value ? 1 : 0;
                 break;
             case 'date':
+            case 'datetime':
                 if (Helpers::is_date($value)) {
                     return "'$value'";
                 }
                 break;
             case 'string':
-            default:
                 return "'$value'";
                 break;
+            case 'array':
+            case 'object':
+            case 'resource':
+                $this->Log->write('cannot handle arrays', Log::LOG_LEVEL_WARNING, $value);
+                break;
+            case 'NULL':
+                return 'NULL';
+                break;
+            default:
+                $this->Log->write('unknown type ' . $type, Log::LOG_LEVEL_WARNING, $value);
+                break;
         }
-        $this->Log->write('error processing value for type', Log::LOG_LEVEL_USER);
+        $this->Log->write('error processing value for type', Log::LOG_LEVEL_USER, $type);
 
         return null;
+    }
+
+
+    /**
+     * Determine the type of the value based on the database field type and pass that to Db::quote().
+     *
+     * @param string $table
+     * @param string $field
+     * @param null $value
+     * @return mixed
+     * @uses Db::fieldStructure()
+     * @uses Db::quote()
+     */
+    public function quoteField($table = '', $field = '', $value = null)
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        $structure = $this->fieldStructure($table, $field);
+        $type = $structure['type'];
+        $this->Log->write($table . '.' . $field . ' type', Log::LOG_LEVEL_WARNING, $type);
+
+        return $this->quote($value, $type);
     }
 
 
@@ -903,7 +1171,7 @@ class Db
         if (!Helpers::is_string_ne($table)) {
             $this->Log->write('table name not provided', Log::LOG_LEVEL_WARNING);
 
-            return false;
+            return $this->table_structure;
         }
 
         // use a cached value to avoid querying the database and processing again
@@ -927,6 +1195,9 @@ class Db
 
         $structure = array();
         foreach ($fields as $field) {
+            if ($field === null) {
+                continue;
+            }
             $type = '';
             $size = '';
             $extra = '';
@@ -946,13 +1217,16 @@ class Db
 
             switch ($field['Key']) {
                 case 'PRI':
-                    $key = 'Primary';
+                    $key = 'primary';
                     break;
                 case 'MUL':
-                    $key = 'Multiple';
+                    $key = 'foreign';
+                    break;
+                case 'UNI':
+                    $key = 'unique';
                     break;
                 default:
-                    $key = '';
+                    $key = $field['Key'];
                     break;
             }
 
@@ -991,7 +1265,7 @@ class Db
      */
     public function update($table = '', $pairs = array(), $where = array(), $limit = -1, $enqueue = false)
     {
-        $this->Log->write('Db::update()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
         if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
@@ -1044,8 +1318,12 @@ class Db
      */
     public function begin()
     {
-        $this->Log->write('Db::begin()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        if ($this->transaction_started) {
+            $this->commit();
+        }
         $this->transaction_started = $this->dbh->beginTransaction();
+        $this->writeQueryParameters('/* BEGIN */', null);
     }
 
 
@@ -1056,9 +1334,10 @@ class Db
      */
     public function commit()
     {
-        $this->Log->write('Db::commit()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
         if ($this->transaction_started) {
             $this->dbh->commit();
+            $this->writeQueryParameters('/* COMMIT */', null);
             $this->transaction_started = false;
         }
     }
@@ -1071,9 +1350,10 @@ class Db
      */
     public function rollback()
     {
-        $this->Log->write('Db::rollback()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
         if ($this->transaction_started) {
-            $this->dbh->rollback();
+            $this->dbh->rollBack();
+            $this->writeQueryParameters('/* ROLLBACK */', null);
             $this->transaction_started = false;
         }
     }
@@ -1106,18 +1386,20 @@ class Db
 
         $this->tableStructure($table);
 
-        if (!in_array($field, $this->table_structure[$table])) {
-            $this->Log->write('field ' . $field . ' is not in table ' . $table, Log::LOG_LEVEL_WARNING);
+        //if (!in_array($field, $this->table_structure[$table])) {
+        if (!array_key_exists($field, $this->table_structure[$table])) {
+            $this->Log->write('field ' . $field . ' is not in table ' . $table, Log::LOG_LEVEL_WARNING, $this->table_structure);
 
             return false;
         }
         // end input validation
 
         // get column definitions for the field of the table
-        $row = $this->query("SHOW COLUMNS FROM {$table} WHERE Field = '{$field}'", 'single');
+        $sql = "SHOW COLUMNS\n  FROM {$table}\n  WHERE Field = '{$field}'";
+        $row = $this->query($sql, null, 'first');
 
         if (!$row) {
-            $this->Log->write('error getting result for query', Log::LOG_LEVEL_WARNING);
+            $this->Log->write('error getting result for query', Log::LOG_LEVEL_WARNING, $row);
 
             return false;
         }
@@ -1155,10 +1437,10 @@ class Db
      */
     private function bind($parameters = array())
     {
-        $this->Log->write('Db::bind()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!Helpers::is_array_ne($parameters)) {
-            $this->Log->write('parameters is empty', Log::LOG_LEVEL_WARNING);
+            $this->Log->write('parameters is empty', Log::LOG_LEVEL_WARNING, Helpers::get_call_string());
 
             return false;
         }
@@ -1193,7 +1475,7 @@ class Db
      */
     private function where($conditions = array(), $conjunction = 'AND')
     {
-        $this->Log->write('Db::where()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!Helpers::is_array_ne($conditions)) {
             $this->Log->write('no conditions provided', Log::LOG_LEVEL_WARNING);
@@ -1203,10 +1485,15 @@ class Db
 
         $params = array();
         $sql = PHP_EOL . '  WHERE (';
-        $line_end = ' ' . $conjunction . PHP_EOL;
+        $line_end = PHP_EOL . '    ' . $conjunction . ' ';
         $i = 0;
         foreach ($conditions as $fieldop => $value) {
-            list($field, $op) = explode(':', $fieldop);
+            if (strstr($fieldop, ':')) {
+                list($field, $op) = explode(':', $fieldop);
+            } else {
+                $field = $fieldop;
+                $op = null;
+            }
             if (!in_array(strtoupper($op), array('IN', 'NOT IN')) && Helpers::is_array_ne($value)) {
                 // this is a set of OR conditions
                 if ($i > 0) {
@@ -1221,7 +1508,7 @@ class Db
                     list($field, $op) = explode(':', $vfieldop);
                     if (in_array(strtoupper($op), array('IN', 'NOT IN'))) {
                         // handle IN array elements
-                        $sql .= '  ' . $field . ' ' . $op . ' (';
+                        $sql .= $field . ' ' . $op . ' (';
                         $sql .= implode(', ', array_fill(0, count($vvalue), '?'));
                         $sql .= ')';
                         $params = array_merge($params, array_values($vvalue));
@@ -1229,7 +1516,7 @@ class Db
                         if ($op === null || !Helpers::is_string_ne($op)) {
                             $op = '=';
                         }
-                        $sql .= '  ' . $field . ' ' . $op . ' ?';
+                        $sql .= $field . ' ' . $op . ' ?';
                         $params[] = $value;
                     }
                     $vi++;
@@ -1241,7 +1528,7 @@ class Db
                 }
                 if (in_array(strtoupper($op), array('IN', 'NOT IN'))) {
                     // handle IN array elements
-                    $sql .= '  ' . $field . ' ' . $op . ' (';
+                    $sql .= $field . ' ' . $op . ' (';
                     $sql .= implode(', ', array_fill(0, count($value), '?'));
                     $sql .= ')';
                     $params = array_merge($params, array_values($value));
@@ -1249,7 +1536,7 @@ class Db
                     if ($op === null || !Helpers::is_string_ne($op)) {
                         $op = '=';
                     }
-                    $sql .= '  ' . $field . ' ' . $op . ' ?';
+                    $sql .= $field . ' ' . $op . ' ?';
                     $params[] = $value;
                 }
             }
@@ -1271,7 +1558,7 @@ class Db
      */
     private function writeFile($file = '', $content = '')
     {
-        $this->Log->write('Db::writeFile()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!Helpers::is_string_ne($file) || !is_file($file) || !file_exists($file)) {
             $this->Log->write('file is not a string or does not exist for writing', Log::LOG_LEVEL_WARNING);
@@ -1280,5 +1567,37 @@ class Db
         }
 
         return file_put_contents($file, $content . PHP_EOL, FILE_APPEND);
+    }
+
+
+    /**
+     * Replace bound parameter placeholders with parameters and return query.
+     *
+     * @param string $sql
+     * @param array $params
+     * @return string
+     * @see http://php.net/manual/en/pdostatement.debugdumpparams.php#113400
+     */
+    private function writeQueryParameters($sql = '', $params = array())
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        if (Helpers::is_array_ne($params)) {
+            foreach ($params as $v) {
+                $v = $this->quote($v);
+                $sql = preg_replace('/\?/', $v, $sql, 1);
+            }
+        }
+
+        // check for comment
+        if (substr($sql, 0, 2) === '/*' && substr($sql, -2) === '*/') {
+            // this is a multi-line comment
+            $mult = strstr($sql, 'SQLSTATE') ? 4 : 2;
+            $query = $sql . str_repeat(PHP_EOL, $mult);
+        } else {
+            $query = rtrim($sql, ';' . PHP_EOL) . ';' . PHP_EOL . PHP_EOL;
+        }
+
+        return file_put_contents(ASSETS_DIR . 'sql/queries_' . date('Y-m-d') . '.sql', $query, FILE_APPEND);
     }
 }
