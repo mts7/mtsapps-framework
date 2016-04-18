@@ -3,7 +3,7 @@
  * Helper functions
  *
  * @author Mike Rodarte
- * @version 1.05
+ * @version 1.06
  */
 namespace mtsapps;
 
@@ -96,6 +96,7 @@ class Helpers
 
     /**
      * The maximum entropy value for 94 characters (like alpha_num_symbol, but with back slash)
+     *
      * @var float
      */
     public static $max_char_entropy = 6.5545888516776;
@@ -209,6 +210,19 @@ class Helpers
 
 
     /**
+     * Display memory usage in a human-readable format.
+     *
+     * @param string $message Optional message to display
+     * @uses Helpers::display_now()
+     * @uses Helpers::memory_usage()
+     */
+    public static function display_memory_usage($message = '')
+    {
+        Helpers::display_now(date('Y-m-d H:i:s') . ' Memory Usage: ' . Helpers::memory_usage() . ' ' . $message);
+    }
+
+
+    /**
      * @param string $str
      */
     public static function display_now($str = '')
@@ -253,8 +267,6 @@ class Helpers
             'charset' => $bits,
         );
     }
-
-
 
 
     /**
@@ -381,7 +393,7 @@ class Helpers
     {
         $type = gettype($value);
 
-        switch($type) {
+        switch ($type) {
             case 'string':
                 $size = strlen($value);
                 break;
@@ -391,7 +403,7 @@ class Helpers
                 break;
             case 'integer':
             case 'double':
-                $size = strlen((string) $value);
+                $size = strlen((string)$value);
                 break;
             case 'array':
                 $size = count($value);
@@ -412,6 +424,24 @@ class Helpers
         }
 
         return $type . '(' . $size . ')';
+    }
+
+
+    /**
+     * Get human-readable size from bytes.
+     *
+     * @param $bytes
+     * @param int $decimals
+     * @return string
+     * @author rommel@rommelsantor.com
+     * @see http://php.net/manual/en/function.filesize.php#106569
+     */
+    public static function human_size($bytes, $decimals = 2)
+    {
+        $sz = 'BKMGTP';
+        $factor = floor((strlen($bytes) - 1) / 3);
+
+        return sprintf("%.{$decimals}f", $bytes / pow(1024, $factor)) . @$sz[$factor];
     }
 
 
@@ -514,6 +544,19 @@ class Helpers
         }
 
         return strtolower(preg_replace('/[A-Z]/', '_$1', $str));
+    }
+
+
+    /**
+     * Get memory usage as human-readable size.
+     *
+     * @return string
+     */
+    public static function memory_usage()
+    {
+        $bytes = memory_get_usage();
+
+        return Helpers::human_size($bytes);
     }
 
 

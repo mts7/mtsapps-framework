@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.10
+ * @version 1.11
  */
 
 /** mtsapps namespace */
@@ -205,7 +205,6 @@ abstract class DatabaseMap extends Db
         foreach ($this->to_values as $table => &$rows) {
             // map duplicate key values to the unique key values
             $this->fixDuplicateIds($table, $rows);
-            //Helpers::display_now(date('Y-m-d H:i:s') . ' inserting to table ' . $table);
             $this->insertValues($table);
         }
 
@@ -426,7 +425,7 @@ abstract class DatabaseMap extends Db
 
                 if (false === $to_value) {
                     // from key must be invalid
-                    $this->Log->write('skipping ' . $from_key, Log::LOG_LEVEL_USER, $value);
+                    $this->Log->write('to_value is false; skipping ' . $from_key, Log::LOG_LEVEL_USER, $value);
                     $skip = true;
                     break;
                 }
@@ -439,10 +438,12 @@ abstract class DatabaseMap extends Db
                     $skip = true;
                     break;
                 }
-                list($to_table, $to_field) = $result;
+                if (Helpers::is_array_ne($result) && count($result) === 2) {
+                    list($to_table, $to_field) = $result;
 
-                // assign value to row[field]
-                $to_row[$to_field] = $to_value;
+                    // assign value to row[field]
+                    $to_row[$to_field] = $to_value;
+                }
             } // end foreach row
 
             if ($skip) {
@@ -517,9 +518,9 @@ abstract class DatabaseMap extends Db
 
             $result = $this->buildTableFieldValues($relation);
             if ($result === false) {
-                $this->Log->write('Could not get values from relations', Log::LOG_LEVEL_WARNING, $relation);
+                $this->Log->write('Could not get values from relations', Log::LOG_LEVEL_USER, $relation);
             } elseif ($result === 0) {
-                $this->Log->write('Found no values from relations', Log::LOG_LEVEL_WARNING, $relation);
+                $this->Log->write('Found no values from relations', Log::LOG_LEVEL_USER, $relation);
             } else {
                 $this->Log->write('Found values', Log::LOG_LEVEL_USER, $result);
             }
@@ -657,9 +658,11 @@ abstract class DatabaseMap extends Db
             if ($to === 'skip') {
                 $this->Log->write('skipping this one', Log::LOG_LEVEL_USER);
                 continue;
+            } elseif ($to === null || is_null($to) || !Helpers::is_string_ne($to)) {
+                $this->Log->write('this is not a field to use', Log::LOG_LEVEL_WARNING, $from . ' => to ' . Helpers::get_type_size($to));
+                continue;
             }
             list($from_table, $from_field) = explode($this->table_separator, $from);
-            list($to_table, $to_field) = explode($this->table_separator, $to);
 
             if (Helpers::is_string_ne($from_table)) {
                 if (!array_key_exists($from_table, $this->from_tables)) {
@@ -670,12 +673,15 @@ abstract class DatabaseMap extends Db
                 }
             }
 
-            if (Helpers::is_string_ne($to_table)) {
-                if (!array_key_exists($to_table, $this->to_tables)) {
-                    $this->to_tables[$to_table] = array();
-                }
-                if (Helpers::is_string_ne($to_field) && !array_search($to_field, $this->to_tables[$to_table])) {
-                    $this->to_tables[$to_table][] = $to_field;
+            if ($to !== 'populate' && strstr($to, $this->table_separator)) {
+                list($to_table, $to_field) = explode($this->table_separator, $to);
+                if (Helpers::is_string_ne($to_table)) {
+                    if (!array_key_exists($to_table, $this->to_tables)) {
+                        $this->to_tables[$to_table] = array();
+                    }
+                    if (Helpers::is_string_ne($to_field) && !array_search($to_field, $this->to_tables[$to_table])) {
+                        $this->to_tables[$to_table][] = $to_field;
+                    }
                 }
             }
         }

@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.16
+ * @version 1.19
  */
 namespace mtsapps;
 
@@ -130,7 +130,7 @@ class Db
             $this->Log->write('could not set file properly', Log::LOG_LEVEL_WARNING);
         }
 
-        $this->Log->write('Db::__construct()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (Helpers::is_array_ne($params)) {
             if (array_key_exists('user', $params) && Helpers::is_string_ne($params['user'])) {
@@ -173,11 +173,16 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
         $this->disconnect();
         $this->Log->write('disconnected', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->__destruct();
+        $this->Log = null;
+        unset($this->Log);
     }
 
 
     /**
      * Connect to PDO
+     *
+     * @todo Make this available for other SQL variants
      */
     private function connect()
     {
@@ -257,16 +262,14 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (!Helpers::is_array_ne($this->queue)) {
-            $this->Log->write('queue is empty', Log::LOG_LEVEL_WARNING);
+            $this->Log->write('queue is empty', Log::LOG_LEVEL_USER);
 
             return false;
         }
 
         $results = array();
         foreach ($this->queue as $array) {
-            $this->begin();
             $results[] = call_user_func_array(array($this, 'query'), $array);
-            $this->commit();
         }
         $this->Log->write('found ' . count($results) . ' query results', Log::LOG_LEVEL_USER);
 
@@ -585,14 +588,28 @@ class Db
      */
     public function dumpFile()
     {
-        $this->Log->write('Db::dumpFile()', Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         $args = func_get_args();
         if (count($args) === 1) {
             $this->Log->write('argument provided', Log::LOG_LEVEL_USER);
             if (Helpers::is_string_ne($args[0])) {
-                $this->dump_file = realpath(__DIR__ . '/' . $args[0]);
-                $this->Log->write('set dump file path', Log::LOG_LEVEL_USER);
+                // file is a full path, so split it to directory and file name
+                $dir = dirname($args[0]);
+                $file = basename($args[0]);
+                // handle relative directories
+                if (!is_dir($dir)) {
+                    $this->Log->write('directory does not exist', Log::LOG_LEVEL_USER, $dir);
+                    $dir = __DIR__ . DIRECTORY_SEPARATOR . $dir;
+                    if (!is_dir($dir)) {
+                        $this->Log->write('this directory does not exist', Log::LOG_LEVEL_USER, $dir);
+                        $dir = __DIR__;
+                    }
+                }
+                $dir = realpath($dir) . DIRECTORY_SEPARATOR;
+                $this->dump_file = $dir . $file;
+                $this->Log->write('set dump file path', Log::LOG_LEVEL_USER, $dir . $file);
+                touch($this->dump_file);
             }
         }
 
@@ -632,20 +649,22 @@ class Db
         }
 
         // disable foreign key checks in dump file
-        $this->writeFile($this->dump_file, '/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;');
+        $this->writeFile($this->dump_file, '/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;' . PHP_EOL);
 
         foreach ($tables as $table) {
             $sql = 'SELECT *';
             $sql .= '  FROM `' . $table . '`';
             $rows = $this->query($sql, array(), 'array');
-            $output = 'TRUNCATE TABLE ' . $table . ';' . PHP_EOL;
             list($sql,) = $this->buildInsert($table, $rows, true, false);
-            $output .= $sql . ';' . PHP_EOL;
-            $this->writeFile($this->dump_file, $output);
+            if (Helpers::is_string_ne($sql)) {
+                $output = 'TRUNCATE TABLE ' . $table . ';' . PHP_EOL;
+                $output .= $sql . ';' . PHP_EOL;
+                $this->writeFile($this->dump_file, $output);
+            }
         }
 
         // reset foreign key checks in dump file
-        $this->writeFile($this->dump_file, '/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;');
+        $this->writeFile($this->dump_file, '/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;' . PHP_EOL);
 
         $this->Log->write('wrote sql to dump file', Log::LOG_LEVEL_USER);
 
@@ -958,6 +977,7 @@ class Db
 
     /**
      * Execute SQL from a file (after running file_get_contents).
+     * This does not handle delimiters (as when used with stored procedures, triggers, or functions).
      *
      * @param string $sql
      * @return bool|int
@@ -985,6 +1005,52 @@ class Db
         }
 
         return $num_rows;
+    }
+
+
+    /**
+     * Import a file to MySQL through command line.
+     *
+     * @param string $file
+     * @return bool
+     * @todo Make this available for other SQL variants.
+     */
+    public function importFile($file = '')
+    {
+        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+
+        // input validation
+        if (!Helpers::is_string_ne($file)) {
+            $this->Log->write('no file provided', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($file));
+
+            return false;
+        }
+        if (!is_file($file)) {
+            $this->Log->write('file does not exist', Log::LOG_LEVEL_WARNING, $file);
+
+            return false;
+        }
+        $ext = substr($file, -3);
+        if ($ext !== 'sql') {
+            $this->Log->write('file extension must be sql', Log::LOG_LEVEL_WARNING, $ext);
+
+            return false;
+        }
+
+        $command = MYSQL_BIN . 'mysql --verbose -h ' . $this->host . ' -u' . $this->user;
+        if (Helpers::is_string_ne($this->pass)) {
+            $command .= ' -p' . trim($this->pass);
+        }
+        $command .= ' ' . $this->dbname . ' < ' . $file;
+        $output = array();
+        exec($command, $output, $return_var);
+        if ($return_var != 0) {
+            $this->Log->write($return_var . ': Failed to import from file', Log::LOG_LEVEL_WARNING, $output);
+
+            return false;
+        }
+
+        return true;
     }
 
 
@@ -1076,10 +1142,12 @@ class Db
                 $type = 'int';
             } elseif (is_bool($value)) {
                 $type = 'bool';
+            } elseif (is_null($value)) {
+                $type = 'NULL';
             }
         }
 
-        if (!(in_array($type, array('int', 'integer', 'decimal')) && ($value == 0 || $value === null)) && empty($value)) {
+        if (!(in_array($type, array('int', 'integer', 'decimal', 'double', 'float', 'NULL')) && ($value == 0 || $value == null)) && empty($value)) {
             $this->Log->write('value is empty', Log::LOG_LEVEL_USER);
 
             return "''";
@@ -1087,9 +1155,10 @@ class Db
 
         switch ($type) {
             case 'int':
+            case 'tinyint':
             case 'integer':
                 if (Helpers::is_valid_int($value)) {
-                    return $value;
+                    return (int)$value;
                 } else {
                     return 0;
                 }
@@ -1098,7 +1167,7 @@ class Db
             case 'double':
             case 'float':
                 if (Helpers::is_valid_decimal($value)) {
-                    return $value;
+                    return (float)$value;
                 } else {
                     return 0.00;
                 }
@@ -1111,18 +1180,27 @@ class Db
             case 'datetime':
                 if (Helpers::is_date($value)) {
                     return "'$value'";
+                } else {
+                    if ($type === 'datetime') {
+                        return "'0000-00-00 00:00:00'";
+                    } else {
+                        return "'0000-00-00'";
+                    }
                 }
                 break;
             case 'string':
+            case 'varchar':
+            case 'char':
+            case 'enum':
                 return "'$value'";
+                break;
+            case 'NULL':
+                return 'NULL';
                 break;
             case 'array':
             case 'object':
             case 'resource':
                 $this->Log->write('cannot handle arrays', Log::LOG_LEVEL_WARNING, $value);
-                break;
-            case 'NULL':
-                return 'NULL';
                 break;
             default:
                 $this->Log->write('unknown type ' . $type, Log::LOG_LEVEL_WARNING, $value);
@@ -1149,8 +1227,12 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         $structure = $this->fieldStructure($table, $field);
-        $type = $structure['type'];
-        $this->Log->write($table . '.' . $field . ' type', Log::LOG_LEVEL_WARNING, $type);
+        if (strtoupper($structure['null']) === 'YES' && $value === null) {
+            $type = 'NULL';
+        } else {
+            $type = $structure['type'];
+        }
+        $this->Log->write($table . '.' . $field . ' type', Log::LOG_LEVEL_USER, $type);
 
         return $this->quote($value, $type);
     }
@@ -1238,6 +1320,7 @@ class Db
                 'key' => $key,
                 'default' => $field['Default'],
                 'extra' => $field['Extra'],
+                'null' => $field['Null'],
             );
         }
 
@@ -1319,11 +1402,15 @@ class Db
     public function begin()
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
-        if ($this->transaction_started) {
-            $this->commit();
+        try {
+            if ($this->transaction_started) {
+                $this->commit();
+            }
+            $this->transaction_started = $this->dbh->beginTransaction();
+            $this->writeQueryParameters('/* BEGIN */', null);
+        } catch (\Exception $ex) {
+            $this->Log->exception($ex);
         }
-        $this->transaction_started = $this->dbh->beginTransaction();
-        $this->writeQueryParameters('/* BEGIN */', null);
     }
 
 
@@ -1572,6 +1659,7 @@ class Db
 
     /**
      * Replace bound parameter placeholders with parameters and return query.
+     * WARNING: This method uses more memory and time. Only use it if necessary and NOT on production.
      *
      * @param string $sql
      * @param array $params
@@ -1580,6 +1668,9 @@ class Db
      */
     private function writeQueryParameters($sql = '', $params = array())
     {
+        if (true) {
+            return true;
+        }
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         if (Helpers::is_array_ne($params)) {
@@ -1587,6 +1678,8 @@ class Db
                 $v = $this->quote($v);
                 $sql = preg_replace('/\?/', $v, $sql, 1);
             }
+            // free some memory
+            unset($params);
         }
 
         // check for comment
@@ -1597,6 +1690,8 @@ class Db
         } else {
             $query = rtrim($sql, ';' . PHP_EOL) . ';' . PHP_EOL . PHP_EOL;
         }
+        // free some memory
+        unset($sql);
 
         return file_put_contents(ASSETS_DIR . 'sql/queries_' . date('Y-m-d') . '.sql', $query, FILE_APPEND);
     }

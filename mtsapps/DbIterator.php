@@ -76,6 +76,17 @@ class DbIterator implements \Iterator
 
 
     /**
+     * Destructor
+     */
+    public function __destruct()
+    {
+        $this->Log->__destruct();
+        $this->Log = null;
+        unset($this->Log);
+    }
+
+
+    /**
      * @return array|bool
      */
     public function current()

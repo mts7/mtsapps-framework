@@ -3,7 +3,7 @@
  * Generate constants PHP file outside of namespace directories, based on values from the constant table.
  *
  * @author Mike Rodarte
- * @version 1.06
+ * @version 1.07
  */
 
 /**
@@ -105,15 +105,19 @@ class Constants extends Generator
 
         // write after each call to generate to decrease memory consumption on server
         foreach ($this->iterator as $i => $row) {
-            $this->generate($row);
-            $bytes = $this->write();
+            $generated = $this->generate($row);
+            if ($generated === false) {
+                $this->Log->write($i . ': Failed to generate code from row', Log::LOG_LEVEL_WARNING);
+                continue;
+            }
 
+            $bytes = $this->write();
             if ($bytes === false) {
                 $this->Log->write($i . ': could not write PHP to file', Log::LOG_LEVEL_WARNING);
             }
         }
 
-        require $this->file_path;
+        require_once $this->file_path;
 
         return true;
     }
@@ -133,8 +137,8 @@ class Constants extends Generator
 
         // input validation
         if (!Helpers::is_array_ne($array)) {
-            $this->Log->write('array is invalid', Log::LOG_LEVEL_WARNING, $array);
-            
+            $this->Log->write('array is invalid', Log::LOG_LEVEL_WARNING, Helpers::get_call_string());
+
             return false;
         }
         if (!array_key_exists('table_name', $array) || !array_key_exists('name_field', $array) || !array_key_exists('value_field', $array) || !array_key_exists('type', $array)) {
@@ -180,6 +184,12 @@ class Constants extends Generator
         }
         $php .= '// END ' . $table . '.' . $field . PHP_EOL . PHP_EOL;
         $this->Log->write('built PHP string with ' . strlen($php) . ' characters', Log::LOG_LEVEL_USER);
+
+        if (!Helpers::is_string_ne($php)) {
+            $this->Log->write('There was an issue building the PHP.', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($php));
+
+            return false;
+        }
 
         // append string to global string
         $this->php .= $php;

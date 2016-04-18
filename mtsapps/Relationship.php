@@ -120,7 +120,7 @@ class Relationship extends Generator
 
         $this->Log->write('successfully created and wrote file', Log::LOG_LEVEL_USER, $this->file_path);
 
-        require $this->file_path;
+        require_once $this->file_path;
 
         return true;
     }

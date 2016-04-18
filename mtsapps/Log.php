@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.12
+ * @version 1.13
  */
 
 /**
@@ -63,6 +63,11 @@ class Log
     private $file = '';
 
     /**
+     * @var null
+     */
+    private $handle = null;
+
+    /**
      * @var string
      */
     private $log_directory = '';
@@ -116,6 +121,18 @@ class Log
             if (array_key_exists('separator', $params) && Helpers::is_string_ne($params['separator'])) {
                 $this->separator = $params['separator'];
             }
+        }
+    }
+
+
+    /**
+     * Destructor
+     * Close the file handle.
+     */
+    public function __destruct()
+    {
+        if ($this->handle !== null && $this->handle !== false && is_resource($this->handle)) {
+            fclose($this->handle);
         }
     }
 
@@ -184,6 +201,12 @@ class Log
         } elseif (!Helpers::is_string_ne($this->file)) {
             $this->file = $this->default_file;
         }
+
+        // close the file handle
+        if ($this->handle !== null && $this->handle !== false) {
+            fclose($this->handle);
+        }
+        $this->handle = fopen($this->log_directory . $this->file, 'a');
 
         // return the file name
         return $this->file;
@@ -299,7 +322,8 @@ class Log
             $this->messages[] = $message;
 
             // write the message to the provided log file
-            return file_put_contents($this->log_directory . $this->file, $message . PHP_EOL, FILE_APPEND);
+            //return file_put_contents($this->log_directory . $this->file, $message . PHP_EOL, FILE_APPEND);
+            return fwrite($this->handle, $message . PHP_EOL);
         }
 
         return true;
