@@ -1,7 +1,7 @@
 <?php
 /**
  * @author Mike Rodarte
- * @version 1.19
+ * @version 1.20
  */
 namespace mtsapps;
 
@@ -75,7 +75,7 @@ class Db
     /**
      * @var array
      */
-    private $queue = array();
+    protected $queue = array();
 
     /**
      * @var \PDOStatement
@@ -236,14 +236,15 @@ class Db
     public function enqueue($sql = '', $parameters = array(), $return_type = null)
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
-        $queue_length = count($this->queue);
+        $queue_length = $this->queueLength();
         $this->Log->write('original queue length', Log::LOG_LEVEL_USER, $queue_length);
-        $this->queue[] = array(
+        $script = array(
             'sql' => $sql,
             'parameters' => $parameters,
             'return_type' => $return_type,
         );
-        $new_queue_length = count($this->queue);
+        $this->queue[] = $script;
+        $new_queue_length = $this->queueLength();
         $this->Log->write('new queue length', Log::LOG_LEVEL_USER, $new_queue_length);
 
         return $new_queue_length - $queue_length === 1;
@@ -339,14 +340,14 @@ class Db
         } catch (\PDOException $ex) {
             $this->exception = $ex;
             $this->rollback();
-            $this->Log->exception($ex);
+            $this->Log->exception($ex, array('sql' => $sql, 'params' => $parameters));
             $this->writeQueryParameters(wordwrap('/* ' . $ex->getMessage() . ' */', 120, PHP_EOL . ' * '), null);
 
             return false;
         } catch (\Exception $ex) {
             $this->exception = $ex;
             $this->rollback();
-            $this->Log->exception($ex);
+            $this->Log->exception($ex, array('sql' => $sql, 'params' => $parameters));
             $this->writeQueryParameters(wordwrap('/* ' . $ex->getMessage() . ' */', 120, PHP_EOL . ' * '), null);
 
             return false;
@@ -1081,7 +1082,11 @@ class Db
         if ($enqueue) {
             $this->Log->write('enqueue parameters', Log::LOG_LEVEL_USER);
 
-            return $this->enqueue($sql, $params, 'insert');
+            $enqueued = $this->enqueue($sql, $params, 'insert');
+            if (!$enqueued) {
+                $this->Log->write('error adding query to queue', Log::LOG_LEVEL_WARNING, array('sql' => $sql, 'params' => $params));
+            }
+            return $enqueued;
         } else {
             $this->Log->write('inserting sql in transaction', Log::LOG_LEVEL_USER);
             // execute INSERT query in transaction
@@ -1114,6 +1119,17 @@ class Db
         }
 
         return $this->log_level;
+    }
+
+
+    /**
+     * Get the length of the current queue for this instance of the class.
+     * 
+     * @return mixed
+     */
+    public function queueLength()
+    {
+        return count($this->queue);
     }
 
 
@@ -1192,6 +1208,8 @@ class Db
             case 'varchar':
             case 'char':
             case 'enum':
+            case 'text':
+                $value = str_replace("'", '', $value);
                 return "'$value'";
                 break;
             case 'NULL':
@@ -1200,7 +1218,7 @@ class Db
             case 'array':
             case 'object':
             case 'resource':
-                $this->Log->write('cannot handle arrays', Log::LOG_LEVEL_WARNING, $value);
+                $this->Log->write('cannot handle ' . $type, Log::LOG_LEVEL_WARNING, $value);
                 break;
             default:
                 $this->Log->write('unknown type ' . $type, Log::LOG_LEVEL_WARNING, $value);
@@ -1675,7 +1693,7 @@ class Db
 
         if (Helpers::is_array_ne($params)) {
             foreach ($params as $v) {
-                $v = $this->quote($v);
+                $v = str_replace('?', '~', $this->quote($v));
                 $sql = preg_replace('/\?/', $v, $sql, 1);
             }
             // free some memory

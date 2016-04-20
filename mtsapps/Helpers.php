@@ -3,7 +3,7 @@
  * Helper functions
  *
  * @author Mike Rodarte
- * @version 1.06
+ * @version 1.07
  */
 namespace mtsapps;
 
@@ -218,7 +218,7 @@ class Helpers
      */
     public static function display_memory_usage($message = '')
     {
-        Helpers::display_now(date('Y-m-d H:i:s') . ' Memory Usage: ' . Helpers::memory_usage() . ' ' . $message);
+        Helpers::display_now(date('Y-m-d H:i:s') . ' Memory Usage: ' . Helpers::memory_usage() . ' ' . Helpers::get_string($message));
     }
 
 
@@ -337,6 +337,28 @@ class Helpers
         }
 
         return $charset;
+    }
+
+
+    /**
+     * Get the trace of the call, then return the functions called.
+     *
+     * @return array
+     */
+    public static function get_functions()
+    {
+        $stack = debug_backtrace();
+        $calls = array();
+        foreach ($stack as $array) {
+            $file = isset($array['file']) ? $array['file'] . ':' : '';
+            $line = isset($array['line']) ? $array['line'] : 0;
+            $class = array_key_exists('class', $array) ? $array['class'] . '::' : '';
+            $func = isset($array['function']) ? $array['function'] : '';
+            $msg = Helpers::is_string_ne($file) ? $file . $line . ' => ' . $class . $func : Helpers::is_string_ne($func) ? $class . $func : 'unknown stack item';
+            $calls[] = $msg;
+        }
+
+        return $calls;
     }
 
 

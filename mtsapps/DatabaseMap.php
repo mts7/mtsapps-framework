@@ -215,7 +215,6 @@ abstract class DatabaseMap extends Db
             Helpers::display_now($this->table_field_values);
         }
 
-        //Helpers::display_now(date('Y-m-d H:i:s') . ' executing queue');
         $this->Log->write('executing queue', Log::LOG_LEVEL_USER);
         $this->executeQueue();
 
@@ -607,7 +606,7 @@ abstract class DatabaseMap extends Db
             }
         }
 
-        // TODO: sort by either first field, id field, or specified field in parameters
+        // sort by either first field, id field, or specified field in parameters
         usort($rows, function ($a, $b) {
             if (array_key_exists('id', $a) && array_key_exists('id', $b)) {
                 $id_field = 'id';
