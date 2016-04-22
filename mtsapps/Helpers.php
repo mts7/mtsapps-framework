@@ -3,7 +3,7 @@
  * Helper functions
  *
  * @author Mike Rodarte
- * @version 1.07
+ * @version 1.08
  */
 namespace mtsapps;
 
@@ -100,6 +100,73 @@ class Helpers
      * @var float
      */
     public static $max_char_entropy = 6.5545888516776;
+
+
+    /**
+     * Validate the page request to make sure it is AJAX from this website and an allowed page.
+     * Update the $pages_white_list accordingly.
+     * Instead of returning a value, the function kills the execution of the page if invalid.
+     *
+     * @param string $path Path of this file, relative to the root web directory (with trailing slash)
+     * @param array $white_list List of pages (including extensions and excluding paths) that can access the API
+     * @param Boolean $debug Show precise messages or mark as 403 and send Forbidden.
+     */
+    public static function ajax_validation($path = '', $white_list = array(), $debug = false)
+    {
+        // AJAX check
+        if (!array_key_exists('HTTP_X_REQUESTED_WITH', $_SERVER)) {
+            if ($debug) {
+                die('This script must be accessed via AJAX.');
+            } else {
+                header('HTTP/1.0 403 Forbidden');
+                die('Forbidden');
+            }
+        }
+
+        // Referrer check
+        $refer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : false;
+
+        if (!$refer) {
+            if ($debug) {
+                die('This script must be accessed from a page.');
+            } else {
+                header('HTTP/1.0 403 Forbidden');
+                die('Forbidden');
+            }
+        }
+
+        // Same origin check
+        $this_path = $path . basename($_SERVER['SCRIPT_NAME']);
+        $host_dir = str_replace($this_path, '', $_SERVER['SCRIPT_NAME']);
+
+        if (substr($refer, 0, strlen($host_dir)) !== $host_dir) {
+            if ($debug) {
+                die('This script must be called from this website.');
+            } else {
+                header('HTTP/1.0 403 Forbidden');
+                die('Forbidden');
+            }
+        }
+
+        // White list check
+        $valid = false;
+        foreach ($white_list as $page) {
+            if (strstr($refer, $page)) {
+                $valid = true;
+                break;
+            }
+        }
+
+        if (!$valid) {
+            if ($debug) {
+                die('The page that called this script is not in the white list.');
+            } else {
+                header('HTTP/1.0 403 Forbidden');
+                die('Forbidden');
+            }
+        }
+    }
+
 
     /**
      * Flatten a multi-dimensional array
