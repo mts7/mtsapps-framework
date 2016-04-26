@@ -34,7 +34,9 @@ function array_unique(a) {
  * @returns {number}
  * @see http://www.w3schools.com/jsref/jsref_random.asp
  */
+function get_random(start, end) {
     if (!isNaN(start) || !isNaN(end) || start > end) {
+        return -1;
     }
     return Math.floor((Math.random() * end) + start);
 }
