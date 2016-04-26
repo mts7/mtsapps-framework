@@ -110,6 +110,7 @@ class Helpers
      * @param string $path Path of this file, relative to the root web directory (with trailing slash)
      * @param array $white_list List of pages (including extensions and excluding paths) that can access the API
      * @param Boolean $debug Show precise messages or mark as 403 and send Forbidden.
+     * @todo Add other validation that is server-based in addition to request-based (since requests can be forged)
      */
     public static function ajax_validation($path = '', $white_list = array(), $debug = false)
     {
@@ -138,8 +139,8 @@ class Helpers
         // Same origin check
         $this_path = $path . basename($_SERVER['SCRIPT_NAME']);
         $host_dir = str_replace($this_path, '', $_SERVER['SCRIPT_NAME']);
-
-        if (substr($refer, 0, strlen($host_dir)) !== $host_dir) {
+        $refer_without_host = preg_replace('/https?:\/\/' . $_SERVER['HTTP_HOST'] . '/', '', $refer);
+        if (substr($refer_without_host, 0, strlen($host_dir)) !== $host_dir) {
             if ($debug) {
                 die('This script must be called from this website.');
             } else {
