@@ -3,7 +3,7 @@
  * Helper functions
  *
  * @author Mike Rodarte
- * @version 1.08
+ * @version 1.09
  */
 namespace mtsapps;
 
@@ -104,7 +104,7 @@ class Helpers
 
     /**
      * Validate the page request to make sure it is AJAX from this website and an allowed page.
-     * Update the $pages_white_list accordingly.
+     * Update the $white_list accordingly.
      * Instead of returning a value, the function kills the execution of the page if invalid.
      *
      * @param string $path Path of this file, relative to the root web directory (with trailing slash)
@@ -178,6 +178,7 @@ class Helpers
      */
     public static function array_flatten($array = array())
     {
+        // input validation
         if (!self::is_array_ne($array)) {
             return array();
         }
@@ -218,7 +219,7 @@ class Helpers
         // build the command
         $command = "mysqldump -u ${user} -h ${host} ";
         if (self::is_string_ne($pass)) {
-            $command .= "-p${pass} ";
+            $command .= "-p'${pass}' ";
         }
         $command .= "${db} -v > $sql_file";
         if (defined('MYSQL_BIN')) {
@@ -227,6 +228,10 @@ class Helpers
 
         // execute the command
         exec($command, $output, $status);
+        if ($status != 0) {
+            // there was an error executing the command
+            self::display_memory_usage('Error executing ' . $command);
+        }
 
         // return the size of the sql file (> 0 assumes it was written successfully)
         return filesize($sql_file);
@@ -241,6 +246,7 @@ class Helpers
      */
     public static function bytes_from_shorthand($short = '')
     {
+        // input validation
         if (!self::is_string_ne($short)) {
             return $short;
         }
@@ -286,16 +292,19 @@ class Helpers
      */
     public static function display_memory_usage($message = '')
     {
-        Helpers::display_now(date('Y-m-d H:i:s') . ' Memory Usage: ' . Helpers::memory_usage() . ' ' . Helpers::get_string($message));
+        self::display_now(date('Y-m-d H:i:s') . ' Memory Usage: ' . self::memory_usage() . ' ' . self::get_string($message));
     }
 
 
     /**
+     * Instantly display whatever has been provided to the static method.
+     *
      * @param string $str
      */
     public static function display_now($str = '')
     {
-        echo self::get_string($str) . "<br />\n";
+        // some browsers require 2K of data to be sent before responses are displayed
+        echo self::get_string($str) . str_repeat(' ', 2048) . "<br />\n";
         flush();
         ob_flush();
     }
@@ -349,13 +358,13 @@ class Helpers
         array_shift($bt);
 
         // input validation
-        if (!Helpers::is_array_ne($bt)) {
+        if (!self::is_array_ne($bt)) {
             return '';
         }
         $call_string = '';
         $caller = array_shift($bt);
 
-        if (Helpers::is_array_ne($caller)) {
+        if (self::is_array_ne($caller)) {
             if (array_key_exists('file', $caller)) {
                 $call_string .= basename($caller['file']);
             }
@@ -363,9 +372,9 @@ class Helpers
                 $call_string .= '(' . $caller['line'] . ')';
             }
 
-            if (Helpers::is_array_ne($bt)) {
+            if (self::is_array_ne($bt)) {
                 $class_caller = array_shift($bt);
-                if (Helpers::is_array_ne($class_caller)) {
+                if (self::is_array_ne($class_caller)) {
                     $call_string .= ' ';
                     if (array_key_exists('class', $class_caller)) {
                         $class = substr($class_caller['class'], strrpos($class_caller['class'], '\\') + 1);
@@ -422,7 +431,7 @@ class Helpers
             $line = isset($array['line']) ? $array['line'] : 0;
             $class = array_key_exists('class', $array) ? $array['class'] . '::' : '';
             $func = isset($array['function']) ? $array['function'] : '';
-            $msg = Helpers::is_string_ne($file) ? $file . $line . ' => ' . $class . $func : Helpers::is_string_ne($func) ? $class . $func : 'unknown stack item';
+            $msg = self::is_string_ne($file) ? $file . $line . ' => ' . $class . $func : self::is_string_ne($func) ? $class . $func : 'unknown stack item';
             $calls[] = $msg;
         }
 
@@ -548,7 +557,7 @@ class Helpers
 
 
     /**
-     * Check for valid date
+     * Check for valid date by converting to time.
      *
      * @param string $value
      * @return bool
@@ -587,6 +596,7 @@ class Helpers
         }
 
         $parts = explode('.', $value);
+        // check for multiple decimal points
         if (count($parts) > 2) {
             return false;
         }
@@ -644,9 +654,7 @@ class Helpers
      */
     public static function memory_usage()
     {
-        $bytes = memory_get_usage();
-
-        return Helpers::human_size($bytes);
+        return self::human_size(memory_get_usage());
     }
 
 
@@ -748,7 +756,7 @@ class Helpers
      */
     public static function parse_html($file = '', $placeholders = array())
     {
-        if (!is_string($file) || strlen($file) > 0 || is_file($file) || file_exists($file)) {
+        if (!self::is_string_ne($file) || !is_file($file) || !file_exists($file)) {
             // file is invalid
             return '';
         }

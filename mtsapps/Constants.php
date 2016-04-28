@@ -3,7 +3,7 @@
  * Generate constants PHP file outside of namespace directories, based on values from the constant table.
  *
  * @author Mike Rodarte
- * @version 1.07
+ * @version 1.08
  */
 
 /**
@@ -61,7 +61,7 @@ class Constants extends Generator
         // set up parameters
         $params = array_merge($defaults, $params);
 
-        // initialize database class
+        // initialize generator class
         parent::__construct($params);
 
         $this->Log->write('done constructing ' . __METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
@@ -69,10 +69,12 @@ class Constants extends Generator
 
 
     /**
-     * Build constants from values in database and store them in a PHP file.
+     * Build constants from values in database and store them in a PHP file. Require the file at the end of execution.
      *
      * @return bool
-     * @uses Constants::getConstantList()
+     * @uses Constants::getQuery()
+     * @uses Generator::setIterator()
+     * @uses Generator::buildTopContent()
      * @uses Constants::generate()
      * @uses Constants::write()
      */
@@ -80,6 +82,7 @@ class Constants extends Generator
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
+        // get constant list
         $this->Log->write('getting constant list', Log::LOG_LEVEL_USER);
         $result = $this->getQuery();
         if (!Helpers::is_array_ne($result)) {
@@ -89,6 +92,7 @@ class Constants extends Generator
         }
         list($sql, $params) = $result;
 
+        // set the iterator from the SQL and parameters
         $set_iterator = $this->setIterator($sql, $params);
         if (!$set_iterator) {
             $this->Log->write('could not set iterator with SQL and params', Log::LOG_LEVEL_WARNING, $result);
@@ -96,6 +100,7 @@ class Constants extends Generator
 
         $this->Log->write('have constant list', Log::LOG_LEVEL_USER);
 
+        // build the top content of the PHP file
         $size = $this->buildTopContent(__CLASS__);
         if (!Helpers::is_valid_int($size) || $size < 1) {
             $this->Log->write('could not write top content', Log::LOG_LEVEL_WARNING, __CLASS__);
@@ -117,6 +122,7 @@ class Constants extends Generator
             }
         }
 
+        // require the generated file to provide constants to the rest of the application
         require_once $this->file_path;
 
         return true;
@@ -141,7 +147,22 @@ class Constants extends Generator
 
             return false;
         }
-        if (!array_key_exists('table_name', $array) || !array_key_exists('name_field', $array) || !array_key_exists('value_field', $array) || !array_key_exists('type', $array)) {
+        // these fields need to be present in the array
+        $fields = array(
+            'table_name',
+            'name_field',
+            'value_field',
+            'type',
+        );
+        $valid = true;
+        // check for the existence of each field in the array and break if one of them does not exist
+        foreach ($fields as $field) {
+            if (!array_key_exists($field, $array)) {
+                $valid = false;
+                break;
+            }
+        }
+        if (!$valid) {
             $this->Log->write('input invalid', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -169,7 +190,7 @@ class Constants extends Generator
         }
         $this->Log->write('found rows for generate query', Log::LOG_LEVEL_USER);
 
-        // build PHP string
+        // build PHP string with comments to indicate table and field used in generation
         $php = PHP_EOL . '/**' . PHP_EOL;
         $php .= ' * ' . $table . '.' . $field . PHP_EOL;
         $php .= ' */' . PHP_EOL;
@@ -201,7 +222,7 @@ class Constants extends Generator
     /**
      * Get list of tables and fields to use for generating constants.
      *
-     * @return bool|array
+     * @return array
      */
     protected function getQuery()
     {

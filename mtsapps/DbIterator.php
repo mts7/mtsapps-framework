@@ -25,22 +25,22 @@ class DbIterator implements \Iterator
     private $key = 0;
 
     /**
-     * @var Log
+     * @var Log Log object
      */
     protected $Log = null;
 
     /**
-     * @var array|bool
+     * @var array|bool Result of a statement fetch
      */
     private $result = null;
 
     /**
-     * @var \PDOStatement $stmt
+     * @var \PDOStatement $stmt PDO Statement
      */
     private $stmt = null;
 
     /**
-     * @var bool
+     * @var bool There are still values to process
      */
     private $valid = true;
 
@@ -53,6 +53,7 @@ class DbIterator implements \Iterator
      */
     public function __construct(\PDOStatement $stmt)
     {
+        // set up log file
         $file = 'db_' . date('Y-m-d') . '.log';
         $this->Log = new Log([
             'file' => $file,
@@ -87,6 +88,8 @@ class DbIterator implements \Iterator
 
 
     /**
+     * Getter for $result
+     *
      * @return array|bool
      */
     public function current()
@@ -98,6 +101,8 @@ class DbIterator implements \Iterator
 
 
     /**
+     * Getter for $key
+     *
      * @return int
      */
     public function key()
@@ -109,6 +114,8 @@ class DbIterator implements \Iterator
 
 
     /**
+     * Increment the key, get the result, and update valid (when necessary)
+     *
      * @return null
      * @uses \PDOStatement::fetch()
      */
@@ -138,6 +145,8 @@ class DbIterator implements \Iterator
 
 
     /**
+     * Getter for $valid
+     *
      * @return bool
      */
     public function valid()

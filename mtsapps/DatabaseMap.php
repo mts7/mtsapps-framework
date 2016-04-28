@@ -1,7 +1,10 @@
 <?php
 /**
+ * Map data from one database to new tables in the same database, requiring certain methods to be defined in the child
+ * class. Use Db::export() and Db::import() to move new data to a new database.
+ *
  * @author Mike Rodarte
- * @version 1.11
+ * @version 1.12
  */
 
 /** mtsapps namespace */
@@ -16,6 +19,7 @@ namespace mtsapps;
  * Object assumes the from and to tables are in the same database.
  * Create a map and copy rows from one set of tables and fields to another.
  * This requires the implementation of DatabaseMap::buildToValues() in the child class.
+ * The implementation of transitionValue is extremely important for the mapping process.
  */
 abstract class DatabaseMap extends Db
 {
@@ -66,8 +70,14 @@ abstract class DatabaseMap extends Db
      */
     public function __construct($params = array())
     {
+        // ensure there is a log level to use, defaulting to WARNING
         if (!array_key_exists('log_level', $params)) {
             $params['log_level'] = Log::LOG_LEVEL_WARNING;
+        }
+
+        // set debug value
+        if (array_key_exists('debug', $params)) {
+            $this->debug = !!$params['debug'];
         }
 
         parent::__construct($params);
@@ -77,7 +87,7 @@ abstract class DatabaseMap extends Db
 
 
     /**
-     * Add map array to existing map.
+     * Add map array to existing map by merging them together.
      *
      * @param array $map
      * @return bool
@@ -93,13 +103,8 @@ abstract class DatabaseMap extends Db
             return false;
         }
 
-        $this->Log->write('map before merge', Log::LOG_LEVEL_USER, $this->map);
-        $this->Log->write('map argument', Log::LOG_LEVEL_USER, $map);
         // merge contents of map parameter with existing map array
         $this->map = array_merge($this->map, $map);
-        $this->Log->write('map after merge', Log::LOG_LEVEL_USER, $this->map);
-
-        $this->Log->write('merged map', Log::LOG_LEVEL_USER);
 
         return true;
     }
@@ -120,7 +125,20 @@ abstract class DatabaseMap extends Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!Helpers::is_string_ne($from_table) || !Helpers::is_string_ne($from_field) || !Helpers::is_string_ne($to_table) || !Helpers::is_string_ne($to_field)) {
+        // input validation
+        $variables = array(
+            'from_table',
+            'from_field',
+            'to_table',
+            'to_field',
+        );
+        $valid = true;
+        foreach ($variables as $variable) {
+            if (!Helpers::is_string_ne($$variable)) {
+                $valid = false;
+            }
+        }
+        if (!$valid) {
             $this->Log->write('tables OR fields are invalid', Log::LOG_LEVEL_WARNING);
 
             return false;
@@ -153,7 +171,8 @@ abstract class DatabaseMap extends Db
 
 
     /**
-     * Get values, manipulate results, and insert values
+     * Get values, manipulate results, and insert values.
+     * Most of the memory usage comes from $from_values query and buildToValues().
      *
      * @return bool
      * @uses DatabaseMap::getTables()
@@ -199,12 +218,15 @@ abstract class DatabaseMap extends Db
         }
         $this->Log->write('finished building to values', Log::LOG_LEVEL_USER);
 
+        // sortToValuesTables() was not working, and the tables were ordered properly (since they were added in the
+        // correct order).
         //$this->sortToValuesTables();
 
         $this->Log->write('inserting values for all to values after sorting', Log::LOG_LEVEL_USER);
         foreach ($this->to_values as $table => &$rows) {
             // map duplicate key values to the unique key values
             $this->fixDuplicateIds($table, $rows);
+            // insert to values for this table
             $this->insertValues($table);
         }
 
@@ -215,6 +237,7 @@ abstract class DatabaseMap extends Db
             Helpers::display_now($this->table_field_values);
         }
 
+        // some values are held in a queue because they depend on other values being in the database prior to insertion
         $this->Log->write('executing queue', Log::LOG_LEVEL_USER);
         $this->executeQueue();
 
@@ -292,11 +315,12 @@ abstract class DatabaseMap extends Db
 
 
     /**
-     * Build table field values from keys.
+     * Build table field values from keys for use when checking if a key exists.
      *
-     * @param array $relation
+     * @param array $relation from Relationship for specified table in caller
      * @return bool|int
      * @see DatabaseMap::fixDuplicateIds()
+     * @see Relationship::build()
      */
     private function buildTableFieldValues($relation = array())
     {
@@ -373,6 +397,8 @@ abstract class DatabaseMap extends Db
 
 
     /**
+     * Build to values from the from values with the transitionValue method for cleaning and additional mapping.
+     *
      * @param string $from_table From table name
      * @return bool All fields and values were transitioned
      * @uses DatabaseMap::$from_values
@@ -470,7 +496,7 @@ abstract class DatabaseMap extends Db
         $this->Log->write('set all mappings', Log::LOG_LEVEL_USER, $result);
 
         // this will be true if there were no problems and all fields and values were transitioned
-        return $result;
+        return $to_keys > 0;
     }
 
 
@@ -525,8 +551,6 @@ abstract class DatabaseMap extends Db
             }
         }
 
-        // TODO: unsure where this goes: make sure unique columns (foreign keys) have the proper values when reassigned
-
         // fix the rows
         foreach ($rows as $index => &$row) {
             // check for duplicate rows
@@ -544,7 +568,7 @@ abstract class DatabaseMap extends Db
                     unset($rows[$index]);
                     continue 2;
                 } else {
-                    // this is the first instance of this value, so build list for future mapping of IDs
+                    // this is the first instance of this value, so build a list for future mapping of IDs
                     $unique[$field][$value] = array();
                 }
             }
@@ -593,8 +617,8 @@ abstract class DatabaseMap extends Db
                     // update the row to use the actual parent ID for the value (like find and replace)
                     $row[$field] = $use_id;
 
-                    // TODO: check for existence of key field value before allowing it to be inserted (in order to avoid foreign
-                    // TODO:     key constraint violations) and generate a report of the rows that would have failed
+                    // check for existence of key field value before allowing it to be inserted (in order to avoid foreign
+                    // key constraint violations) and generate a report of the rows that would have failed
                     if (!in_array($use_id, $this->table_field_values[$array['table']][$array['field']])) {
                         $this->missing_keys[$array['table']][$array['field']][] = $use_id;
                         $this->missing_keys[$array['table']][$array['field']] = array_unique($this->missing_keys[$array['table']][$array['field']]);
@@ -672,6 +696,7 @@ abstract class DatabaseMap extends Db
                 }
             }
 
+            // populate is a value that is used to indicate the value is needed, but the field is not needed
             if ($to !== 'populate' && strstr($to, $this->table_separator)) {
                 list($to_table, $to_field) = explode($this->table_separator, $to);
                 if (Helpers::is_string_ne($to_table)) {

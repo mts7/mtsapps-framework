@@ -1,7 +1,11 @@
 <?php
 /**
+ * Standard database class for handling connections, queries, and transactions through PDO
+ * This only works with MySQL for now, and will need updating to work with other RDBMSes like PostgreSQL and MSSQL.
+ *
  * @author Mike Rodarte
- * @version 1.20
+ * @version 1.21
+ * @todo Add database type handling for PostgreSQL, SQL Server, DB2, Oracle
  */
 namespace mtsapps;
 
@@ -13,87 +17,87 @@ namespace mtsapps;
 class Db
 {
     /**
-     * @var \PDO
+     * @var \PDO Database handle
      */
     private $dbh = null;
 
     /**
-     * @var string
+     * @var string Database name
      */
     private $dbname = '';
 
     /**
-     * @var string
+     * @var string File name used for exporting SQL
      */
     private $dump_file = '';
 
     /**
-     * @var \PDOException
+     * @var \PDOException Exception
      */
     private $exception = null;
 
     /**
-     * @var string
+     * @var string Database host
      */
     private $host = '';
 
     /**
-     * @var array
+     * @var array Cached array of values for keys (primary, unique, foreign) in tables
      */
     private $key_values = array();
 
     /**
-     * @var string
+     * @var string The last query prepared
      */
     private $last_query = '';
 
     /**
-     * @var Log
+     * @var Log Log object
      */
     protected $Log = null;
 
     /**
-     * @var int
+     * @var int Log level
      */
     protected $log_level = 0;
 
     /**
-     * @var int
+     * @var int Maximum number of inserts in a single statement
      */
     private $max_inserts = 500;
 
     /**
-     * @var array
+     * @var array Cached IDs based on names in tables
      */
     public $named_ids = array();
 
     /**
-     * @var string
+     * @var string Database password
      */
     private $pass = '';
 
     /**
-     * @var array
+     * @var array Queue of queries to execute later
      */
     protected $queue = array();
 
     /**
-     * @var \PDOStatement
+     * @var \PDOStatement PDO Statement
      */
     private $stmt = null;
 
     /**
-     * @var array
+     * @var array Array of tables, fields, and descriptions for fields (from DESCRIBE)
      */
     private $table_structure = array();
 
     /**
-     * @var bool
+     * @var bool Is a transaction started
      */
     private $transaction_started = false;
 
     /**
-     * @var string
+     * @var string Database user name
      */
     private $user = '';
 
@@ -105,6 +109,7 @@ class Db
      */
     public function __construct($params = array())
     {
+        // handle logging
         if (Helpers::is_array_ne($params) && array_key_exists('log_level', $params)) {
             $log_level = $params['log_level'];
         } else {
@@ -132,6 +137,7 @@ class Db
 
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
+        // assign parameters to properties
         if (Helpers::is_array_ne($params)) {
             if (array_key_exists('user', $params) && Helpers::is_string_ne($params['user'])) {
                 $this->user = $params['user'];
@@ -165,6 +171,7 @@ class Db
 
     /**
      * Db destructor.
+     * This disconnects from the database and destroys the Log object.
      *
      * @uses Db::disconnect()
      */
@@ -180,7 +187,7 @@ class Db
 
 
     /**
-     * Connect to PDO
+     * Connect to PDO with the MySQL connection string.
      *
      * @todo Make this available for other SQL variants
      */
@@ -225,13 +232,17 @@ class Db
 
 
     /**
-     * Save the provided arguments to execute later
+     * Save the provided arguments to execute later.
+     * With multiple child classes, each one will have its own queue, as expected. When executing the queue, do so from
+     * the same object that enqueued the query and parameters or copy the queue to the main Db object.
      *
      * @param string $sql
      * @param array $parameters
      * @param null $return_type
      * @return bool True if 1 entry was added
      * @uses Db::$queue
+     * @uses Db::queueLength()
+     * @see  Db::executeQueue()
      */
     public function enqueue($sql = '', $parameters = array(), $return_type = null)
     {
@@ -253,10 +264,12 @@ class Db
 
     /**
      * Execute queries from the queue.
+     * When using multiple child classes of this class, beware of which one enqueued queries.
      *
      * @return array|bool Array of results from calling query in the order of entrance to the queue (FIFO)
      * @uses Db::$queue
      * @uses Db::query()
+     * @see  Db::enqueue()
      */
     public function executeQueue()
     {
@@ -269,6 +282,7 @@ class Db
         }
 
         $results = array();
+        // execute each query in the queue and store the results in an array to return
         foreach ($this->queue as $array) {
             $results[] = call_user_func_array(array($this, 'query'), $array);
         }
@@ -327,6 +341,7 @@ class Db
             return false;
         }
 
+        // bind parameters, if needed
         if (!Helpers::is_array_ne($parameters)) {
             $this->Log->write('parameters is empty', Log::LOG_LEVEL_USER);
             $parameters = null;
@@ -335,7 +350,9 @@ class Db
         }
 
         try {
+            // writeQueryParameters is disabled until manually updated in the code (due to increased execution time)
             $this->writeQueryParameters($sql, $parameters);
+            // execute the query with its parameters
             $executed = $this->stmt->execute();
         } catch (\PDOException $ex) {
             $this->exception = $ex;
@@ -360,23 +377,29 @@ class Db
             return false;
         }
 
+        // the query executed successfully, so return according to the specified return type
         switch ($return_type) {
             case 'array':
+                // an array of arrays indexed by fields, with a large memory footprint
                 $result = $this->stmt->fetchAll(\PDO::FETCH_ASSOC);
                 break;
             case 'flat':
+                // an array of all values in a flattened state
                 $rows = $this->stmt->fetchAll(\PDO::FETCH_ASSOC);
                 $result = Helpers::array_flatten($rows);
                 break;
             case 'single':
+                // the first result in the first column of the first row
                 $row = $this->stmt->fetch(\PDO::FETCH_NUM);
                 $result = $row[0];
                 $this->writeQueryParameters('/* ' . $result . ' */');
                 break;
             case 'first':
+                // an array with the first row indexed by field
                 $result = $this->stmt->fetch(\PDO::FETCH_ASSOC);
                 break;
             case 'keyvalue':
+                // array of key value pairs for each row in the result
                 $rows = new DbIterator($this->stmt);
                 $id_field = '';
                 $value_field = '';
@@ -401,19 +424,23 @@ class Db
                 unset($rows, $id_field, $value_field);
                 break;
             case 'insert':
+                // insert ID
                 $result = $this->dbh->lastInsertId();
                 $this->writeQueryParameters('/* ' . $result . ' */');
                 break;
             case 'update':
             case 'delete':
+                // row count greater than 0 (something was updated or deleted)
                 $result = $this->stmt->rowCount() > 0;
                 $this->writeQueryParameters('/* ' . $result . ' */');
                 break;
             case 'iterator':
+                // database iterator
                 $result = new DbIterator($this->stmt);
                 break;
             case null:
             default:
+                // null
                 $result = null;
                 break;
         }
@@ -428,11 +455,12 @@ class Db
      * Create SQL and parameters needed for inserting into database
      *
      * @param string $table Table name
-     * @param array $pairs Either pairs of values (a single row) or multiple rows
+     * @param array|DbIterator $pairs Either pairs of values (a single row) or multiple rows
      * @param bool|false $multiple_rows Flag for if using rows or row for $pairs
      * @param bool $placeholders Use placeholders (true) or use values (false)
      * @param bool $ignore Use INSERT IGNORE
      * @return array|bool
+     * @uses Db::quoteField()
      */
     public function buildInsert($table = '', $pairs = array(), $multiple_rows = false, $placeholders = true, $ignore = false)
     {
@@ -451,10 +479,13 @@ class Db
             $sql .= 'IGNORE ';
         }
         $sql .= 'INTO ' . $table . PHP_EOL;
+
         if ($multiple_rows === true) {
             $fields = array();
             $values = array();
             $insert_sql = $sql;
+
+            // build fields and values from pairs
             foreach ($pairs as $key => $row) {
                 if (!Helpers::is_array_ne($row)) {
                     $this->Log->write('row from pairs is not an array, but is ' . Helpers::get_type_size($row), Log::LOG_LEVEL_WARNING, $row);
@@ -481,8 +512,11 @@ class Db
             $insert_sql .= '  (' . implode(', ', $fields) . ')' . PHP_EOL;
             $insert_sql .= '  VALUES' . PHP_EOL;
             $sql = $insert_sql;
+
+            // either use placeholders with bound parameters or actual, quoted parameters (typically for debugging)
             if ($placeholders) {
                 $counter = 0;
+                // build statements with attention to $max_inserts
                 foreach ($values as $key => $array) {
                     $counter++;
                     if ($counter === $this->max_inserts) {
@@ -490,6 +524,7 @@ class Db
                         $sql .= $insert_sql;
                         $counter = 1;
                     }
+                    // add a ? for each parameter
                     $sql .= '  (' . implode(', ', array_fill(0, count($array), '?')) . '),' . PHP_EOL;
                 }
                 // get all values into one array (to pass as parameters for placeholders)
@@ -503,6 +538,7 @@ class Db
                             Helpers::display_now($values);
                             break;
                         }
+                        // add quoted value to SQL
                         $sql .= $this->quoteField($table, $fields[$index], $value) . ', ';
                     }
                     $sql = substr($sql, 0, -2);
@@ -510,6 +546,7 @@ class Db
                 }
             }
         } else {
+            // there are not multiple rows, this is a single row
             if (!Helpers::is_array_ne($pairs)) {
                 $this->Log->write('pairs is not an array, but is ' . Helpers::get_type_size($pairs), Log::LOG_LEVEL_WARNING, $pairs);
 
@@ -533,10 +570,12 @@ class Db
             $sql .= '  (' . implode(', ', $fields) . ')' . PHP_EOL;
             $sql .= '  VALUES' . PHP_EOL;
             if ($placeholders) {
+                // add a ? for each parameter
                 $sql .= '  (' . implode(', ', array_fill(0, count($values), '?')) . ')' . PHP_EOL;
             } else {
                 $sql .= '  (';
                 foreach ($values as $index => $value) {
+                    // add quoted value to SQL
                     $sql .= $this->quoteField($table, $fields[$index], $value) . ', ';
                 }
                 $sql = substr($sql, 0, -2);
@@ -652,11 +691,19 @@ class Db
         // disable foreign key checks in dump file
         $this->writeFile($this->dump_file, '/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;' . PHP_EOL);
 
+        // get data from table, build insert with the rows, and write the SQL to the dump file
         foreach ($tables as $table) {
+            // build SELECT query
             $sql = 'SELECT *';
             $sql .= '  FROM `' . $table . '`';
+
+            // get all values from the table
             $rows = $this->query($sql, array(), 'array');
+
+            // build the insert statement
             list($sql,) = $this->buildInsert($table, $rows, true, false);
+
+            // write the SQL to the file (with a TRUNCATE TABLE statement before it)
             if (Helpers::is_string_ne($sql)) {
                 $output = 'TRUNCATE TABLE ' . $table . ';' . PHP_EOL;
                 $output .= $sql . ';' . PHP_EOL;
@@ -674,6 +721,8 @@ class Db
 
 
     /**
+     * Save the exception for later use
+     *
      * @return \PDOException
      */
     public function exception()
@@ -735,6 +784,7 @@ class Db
 
     /**
      * Get a single value or all values from a table.
+     * This assumes id is the PRIMARY KEY field in any given table.
      *
      * @param string $table
      * @param string $order_by
@@ -756,12 +806,16 @@ class Db
         $sql .= '  FROM `' . $table . '`';
         $params = array();
 
+        // specify the ID
         if ($id !== null) {
             $sql .= PHP_EOL . '  WHERE id = ?';
             $params[] = $id;
         }
 
-        $sql .= PHP_EOL . '  ORDER BY ' . $order_by;
+        if (Helpers::is_string_ne($order_by)) {
+            $sql .= PHP_EOL . '  ORDER BY ' . $order_by;
+        }
+
         $this->Log->write('sql', Log::LOG_LEVEL_USER, $sql);
 
         $result = $this->query($sql, $params, 'array');
@@ -883,6 +937,8 @@ class Db
      * @param string $table
      * @param bool $force Force the cached value to update
      * @return bool|mixed
+     * @uses Db::getKeyField()
+     * @uses Db::query()
      */
     public function getKeyValues($table = '', $force = false)
     {
@@ -940,6 +996,8 @@ class Db
      * @param string $field
      * @param array $where
      * @return bool|mixed
+     * @uses Db::where()
+     * @uses Db::query()
      */
     public function getNames($table = '', $field = 'name', $where = array())
     {
@@ -977,7 +1035,7 @@ class Db
 
 
     /**
-     * Execute SQL from a file (after running file_get_contents).
+     * Execute SQL from a string (after running file_get_contents on a file).
      * This does not handle delimiters (as when used with stored procedures, triggers, or functions).
      *
      * @param string $sql
@@ -1032,7 +1090,7 @@ class Db
             return false;
         }
         $ext = substr($file, -3);
-        if ($ext !== 'sql') {
+        if (strtolower($ext) !== 'sql') {
             $this->Log->write('file extension must be sql', Log::LOG_LEVEL_WARNING, $ext);
 
             return false;
@@ -1040,7 +1098,7 @@ class Db
 
         $command = MYSQL_BIN . 'mysql --verbose -h ' . $this->host . ' -u' . $this->user;
         if (Helpers::is_string_ne($this->pass)) {
-            $command .= ' -p' . trim($this->pass);
+            $command .= ' -p\'' . trim($this->pass) . '\'';
         }
         $command .= ' ' . $this->dbname . ' < ' . $file;
         $output = array();
@@ -1056,13 +1114,14 @@ class Db
 
 
     /**
-     * Insert values into specified table using key/value pairs array.
+     * Insert or enqueue values into specified table using key/value pairs array.
      *
      * @param string $table
      * @param array $pairs Key/Value pairs to insert
      * @param bool $enqueue Enqueue or execute query
      * @return bool|mixed
      * @uses Db::buildInsert()
+     * @uses Db::enqueue()
      * @uses Db::query()
      */
     public function insert($table = '', $pairs = array(), $enqueue = false)
@@ -1086,6 +1145,7 @@ class Db
             if (!$enqueued) {
                 $this->Log->write('error adding query to queue', Log::LOG_LEVEL_WARNING, array('sql' => $sql, 'params' => $params));
             }
+
             return $enqueued;
         } else {
             $this->Log->write('inserting sql in transaction', Log::LOG_LEVEL_USER);
@@ -1105,6 +1165,7 @@ class Db
      *
      * @return int
      * @uses Log::validateLevel()
+     * @uses Log::logLevel()
      */
     public function logLevel()
     {
@@ -1124,7 +1185,7 @@ class Db
 
     /**
      * Get the length of the current queue for this instance of the class.
-     * 
+     *
      * @return mixed
      */
     public function queueLength()
@@ -1136,8 +1197,8 @@ class Db
     /**
      * Return the value quoted after its type, or null if it is invalid.
      *
-     * @param mixed $value
-     * @param string $type
+     * @param mixed $value Value to quote
+     * @param string $type Expected data type of value
      * @return mixed
      */
     public function quote($value = '', $type = 'string')
@@ -1146,11 +1207,13 @@ class Db
 
         $this->Log->write('type', Log::LOG_LEVEL_USER, $type);
 
+        // input validation
         if (!Helpers::is_string_ne($type)) {
             $type = gettype($value);
             $this->Log->write('set type to ' . $type . ' for value', Log::LOG_LEVEL_USER, $value);
         }
 
+        // if the type is string, the actual type might be different
         if ($type === 'string') {
             if (Helpers::is_valid_decimal($value)) {
                 $type = 'decimal';
@@ -1163,12 +1226,14 @@ class Db
             }
         }
 
+        // check for empty value that is not a number or null
         if (!(in_array($type, array('int', 'integer', 'decimal', 'double', 'float', 'NULL')) && ($value == 0 || $value == null)) && empty($value)) {
             $this->Log->write('value is empty', Log::LOG_LEVEL_USER);
 
             return "''";
         }
 
+        // properly quote the value based on the type
         switch ($type) {
             case 'int':
             case 'tinyint':
@@ -1190,6 +1255,7 @@ class Db
                 break;
             case 'bool':
             case 'boolean':
+                // boolean values should be returned as true or false, but those values don't work well in databases
                 return !!$value ? 1 : 0;
                 break;
             case 'date':
@@ -1209,7 +1275,9 @@ class Db
             case 'char':
             case 'enum':
             case 'text':
+                // TODO: consider using something like addslashes()
                 $value = str_replace("'", '', $value);
+
                 return "'$value'";
                 break;
             case 'NULL':
@@ -1245,6 +1313,7 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         $structure = $this->fieldStructure($table, $field);
+        // check for field accepting null values
         if (strtoupper($structure['null']) === 'YES' && $value === null) {
             $type = 'NULL';
         } else {
@@ -1676,7 +1745,7 @@ class Db
 
 
     /**
-     * Replace bound parameter placeholders with parameters and return query.
+     * Replace bound parameter placeholders with parameters and write query to a file.
      * WARNING: This method uses more memory and time. Only use it if necessary and NOT on production.
      *
      * @param string $sql
@@ -1686,6 +1755,7 @@ class Db
      */
     private function writeQueryParameters($sql = '', $params = array())
     {
+        // @todo: ONLY ENABLE THIS METHOD IF NEEDED FOR DEBUGGING
         if (true) {
             return true;
         }

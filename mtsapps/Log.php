@@ -1,5 +1,9 @@
 <?php
 /**
+ * Log messages to a log file in a log directory with the designated log level. Only messages with a level greater than
+ * or equal to the set log level are written to the file, discarding all others.
+ * Use the LOG_LEVEL_* constants instead of their numeric values.
+ * 
  * @author Mike Rodarte
  * @version 1.13
  */
@@ -18,42 +22,42 @@ namespace mtsapps;
 class Log
 {
     /**
-     * @const int
+     * @const int Debugging messages that would not normally be wanted
      */
     const LOG_LEVEL_DEBUG = 0;
 
     /**
-     * @const int
+     * @const int Generic system information
      */
     const LOG_LEVEL_SYSTEM_INFORMATION = 1;
 
     /**
-     * @const int
+     * @const int A message that an user would want to see at some point
      */
     const LOG_LEVEL_USER = 2;
 
     /**
-     * @const int
+     * @const int An error occurred in standard processing, but is not an exception
      */
     const LOG_LEVEL_WARNING = 3;
 
     /**
-     * @const int
+     * @const int An exception occurred during standard processing and needs to be addressed
      */
     const LOG_LEVEL_ERROR = 4;
 
     /**
-     * @const int
+     * @const int Logging is disabled
      */
     const LOG_LEVEL_OFF = 256;
 
     /**
-     * @var string
+     * @var string Date stamp format
      */
     private $date_format = 'Y-m-d H:i:s';
 
     /**
-     * @var string
+     * @var string Default file name
      */
     private $default_file = 'log.log';
 
@@ -63,27 +67,28 @@ class Log
     private $file = '';
 
     /**
-     * @var null
+     * @var null File handle
      */
     private $handle = null;
 
     /**
-     * @var string
+     * @var string Directory for log file
      */
     private $log_directory = '';
 
     /**
-     * @var int
+     * @var int Current log level
      */
     private $log_level = 0;
 
     /**
-     * @var array
+     * @var array Messages that have been logged
+     * Consider disabling this functionality to save memory
      */
     private $messages = array();
 
     /**
-     * @var string
+     * @var string Separator between parts of the log entry
      */
     private $separator = ' - ';
 
@@ -206,6 +211,7 @@ class Log
         if ($this->handle !== null && $this->handle !== false) {
             fclose($this->handle);
         }
+        // open the file handle
         $this->handle = fopen($this->log_directory . $this->file, 'a');
 
         // return the file name
@@ -214,6 +220,8 @@ class Log
 
 
     /**
+     * Get the last message logged
+     * 
      * @return mixed
      */
     public function last()
