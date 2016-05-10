@@ -41,5 +41,5 @@ function invertColor(hex) {
     var diffB = 255 - decB;
 
     // return the concatenated string
-    return diffB.toString(16) + diffG.toString(16) + diffR.toString(16);
+    return diffR.toString(16) + diffG.toString(16) + diffB.toString(16);
 }
