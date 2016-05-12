@@ -27,6 +27,35 @@ function array_unique(a) {
 
 
 /**
+ * Center an element according to the window, body, and element size.
+ *
+ * @param string selector Element selector
+ * @author Mike Rodarte
+ */
+function centerBox(selector) {
+    var $selector = $(selector);
+    if ($selector.length < 1) {
+        return false;
+    }
+
+    // get widths of containers
+    var windowWidth = $(window).width();
+    var bodyWidth = $('body').width();
+    var boxWidth = $selector.width();
+
+    // calculate widths and positions
+    var centeredLeft = (bodyWidth - boxWidth) / 2;
+    var bodyMargin = windowWidth - bodyWidth;
+    var left = bodyMargin / 2 + centeredLeft;
+
+    // apply the left value to the selector
+    $selector.css({
+        left: left
+    });
+}
+
+
+/**
  * Generate a random integer between the start and end values.
  *
  * @param start Number
