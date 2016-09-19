@@ -15,7 +15,7 @@ namespace mtsapps;
 /**
  * Class DbIterator
  *
- * @package Webolutions\Database
+ * @package mtsapps
  */
 class DbIterator implements \Iterator
 {
@@ -127,9 +127,9 @@ class DbIterator implements \Iterator
         $this->result = $this->stmt->fetch(\PDO::FETCH_ASSOC, \PDO::FETCH_ORI_ABS, $this->key);
         if (false === $this->result) {
             $this->valid = false;
-
-            return null;
         }
+
+        return null;
     }
 
 

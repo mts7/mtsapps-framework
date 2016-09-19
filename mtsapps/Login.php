@@ -12,7 +12,7 @@ namespace mtsapps;
 /**
  * Class Login
  *
- * @package Webolutions
+ * @package mtsapps
  */
 class Login extends Db
 {
