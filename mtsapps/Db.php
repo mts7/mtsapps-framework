@@ -4,7 +4,7 @@
  * This only works with MySQL for now, and will need updating to work with other RDBMSes like PostgreSQL and MSSQL.
  *
  * @author Mike Rodarte
- * @version 1.21
+ * @version 1.22
  * @todo Add database type handling for PostgreSQL, SQL Server, DB2, Oracle
  */
 namespace mtsapps;
@@ -1136,7 +1136,7 @@ class Db
         }
 
         // build SQL
-        list($sql, $params) = $this->buildInsert($table, $pairs);
+        list($sql, $params) = $this->buildInsert($table, $pairs, isset($pairs[0]) && is_array($pairs[0]));
 
         if ($enqueue) {
             $this->Log->write('enqueue parameters', Log::LOG_LEVEL_USER);
