@@ -6,3 +6,5 @@ define('DB_PASS', '');
 define('DB_DB', '');
 
 define('LOG_DIR', '');
+define('ASSETS_DIR', '');
+define('MYSQL_BIN', '');

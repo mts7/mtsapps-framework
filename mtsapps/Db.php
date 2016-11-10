@@ -4,7 +4,7 @@
  * This only works with MySQL for now, and will need updating to work with other RDBMSes like PostgreSQL and MSSQL.
  *
  * @author Mike Rodarte
- * @version 1.22
+ * @version 1.23
  * @todo Add database type handling for PostgreSQL, SQL Server, DB2, Oracle
  */
 namespace mtsapps;
@@ -207,7 +207,7 @@ class Db
                 die();
             }
             $connection_string = 'mysql:host=' . $this->host . ';dbname=' . $this->dbname;
-            $this->dbh = new \PDO($connection_string, $this->user, $this->pass);
+            $this->dbh = new \PDO($connection_string, $this->user, $this->pass, array(\PDO::MYSQL_ATTR_FOUND_ROWS => true));
             $this->dbh->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         } catch (\PDOException $e) {
             $this->exception = $e;
@@ -445,7 +445,7 @@ class Db
                 break;
         }
 
-        $this->Log->write('have a result', Log::LOG_LEVEL_USER);
+        $this->Log->write('have a ' . gettype($result) . ' result for ' . $return_type, Log::LOG_LEVEL_USER);
 
         return $result;
     }
@@ -466,8 +466,15 @@ class Db
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
-        if (!Helpers::is_string_ne($table) || (!Helpers::is_array_ne($pairs) && !($pairs instanceof DbIterator))) {
-            $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($table) . ', ' . Helpers::get_type_size($pairs));
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('table is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($table));
+            $this->Log->write(Helpers::get_type_size($table), Log::LOG_LEVEL_ERROR);
+
+            return false;
+        }
+        if ((!Helpers::is_array_ne($pairs) && !($pairs instanceof DbIterator))) {
+            $this->Log->write('pairs is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($pairs));
+            $this->Log->write(Helpers::get_type_size($pairs), Log::LOG_LEVEL_ERROR);
 
             return false;
         }
@@ -603,8 +610,15 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
-            $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('table is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($table));
+            $this->Log->write(Helpers::get_type_size($table), Log::LOG_LEVEL_ERROR);
+
+            return false;
+        }
+        if ((!Helpers::is_array_ne($pairs) && !($pairs instanceof DbIterator))) {
+            $this->Log->write('pairs is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($pairs));
+            $this->Log->write(Helpers::get_type_size($pairs), Log::LOG_LEVEL_ERROR);
 
             return false;
         }
@@ -1129,8 +1143,15 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
-            $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('table is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($table));
+            $this->Log->write(Helpers::get_type_size($table), Log::LOG_LEVEL_ERROR);
+
+            return false;
+        }
+        if ((!Helpers::is_array_ne($pairs) && !($pairs instanceof DbIterator))) {
+            $this->Log->write('pairs is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($pairs));
+            $this->Log->write(Helpers::get_type_size($pairs), Log::LOG_LEVEL_ERROR);
 
             return false;
         }
@@ -1326,6 +1347,74 @@ class Db
 
 
     /**
+     * Update or insert data in the database.
+     * If the primary key or unique key is listed in $data, UPDATE will be performed.
+     *
+     * @param string $table
+     * @param array $data
+     * @return bool|mixed|null
+     * @uses Db::insert()
+     * @uses Db::update()
+     */
+    public function store($table = '', $data = array())
+    {
+        // get Primary Key from table
+        $pk = $this->getKeyField($table);
+        if (isset($pk[0])) {
+            $pk = $pk[0];
+        }
+
+        $key_val = array(
+            'field' => $pk,
+            'value' => null,
+        );
+        if (!array_key_exists($pk, $data)) {
+            // get unique fields from the table
+            $fields = $this->getKeyField($table, 'unique');
+            foreach($fields as $field) {
+                if (array_key_exists($field, $data)) {
+                    $key_val['field'] = $field;
+                    $key_val['value'] = $data[$field];
+                    break;
+                }
+            }
+        } else {
+            $key_val['value'] = $data[$pk];
+        }
+
+        $insert = false;
+        $update = false;
+        if (empty($key_val['field'])) {
+            $this->Log->write('could not find proper key field in $data', Log::LOG_LEVEL_WARNING, $data);
+            $insert = true;
+        }
+
+        // check for record existence for the key and value
+        if (!$insert || isset($key_val['value'])) {
+            $q = 'SELECT 1 FROM ' . $table . ' WHERE ' . $key_val['field'] . ' = ?';
+            $rows = $this->query($q, array($key_val['value']), 'single');
+            $update = count($rows) === 1;
+            $insert = count($rows) === 0;
+        }
+
+        // update or insert, depending on which should happen
+        $result = null;
+        if ($update) {
+            $result = $this->update($table, $data, $key_val);
+            $this->Log->write('update', Log::LOG_LEVEL_USER, $result);
+        } elseif ($insert) {
+            $result = $this->insert($table, $data);
+            $this->Log->write('insert', Log::LOG_LEVEL_USER, $result);
+        } else {
+            $result = false;
+            $this->Log->write('could not determine to update or insert', Log::LOG_LEVEL_WARNING);
+        }
+
+        return $result;
+    }
+    
+
+    /**
      * Get table structure using DESCRIBE and cache the value if not already cached.
      *
      * @param string $table Table name
@@ -1438,8 +1527,15 @@ class Db
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
         // input validation
-        if (!Helpers::is_string_ne($table) || !Helpers::is_array_ne($pairs)) {
-            $this->Log->write('table OR pairs is empty', Log::LOG_LEVEL_WARNING);
+        if (!Helpers::is_string_ne($table)) {
+            $this->Log->write('table is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($table));
+            $this->Log->write(Helpers::get_type_size($table), Log::LOG_LEVEL_ERROR);
+
+            return false;
+        }
+        if ((!Helpers::is_array_ne($pairs) && !($pairs instanceof DbIterator))) {
+            $this->Log->write('pairs is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($pairs));
+            $this->Log->write(Helpers::get_type_size($pairs), Log::LOG_LEVEL_ERROR);
 
             return false;
         }
@@ -1538,7 +1634,7 @@ class Db
      *
      * @param string $table
      * @param string $field
-     * @return array
+     * @return array|bool
      * @see http://stackoverflow.com/questions/2350052/how-can-i-get-enum-possible-values-in-a-mysql-database#answer-11429272
      */
     protected function getEnumValues($table = '', $field = '')
@@ -1647,7 +1743,7 @@ class Db
      * @return array|bool
      * @see https://rtfm.modx.com/xpdo/2.x/class-reference/xpdoquery/xpdoquery.where
      */
-    private function where($conditions = array(), $conjunction = 'AND')
+    public function where($conditions = array(), $conjunction = 'AND')
     {
         $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
 
@@ -1658,7 +1754,7 @@ class Db
         }
 
         $params = array();
-        $sql = PHP_EOL . '  WHERE (';
+        $sql = PHP_EOL . '  WHERE (' . PHP_EOL . '    ';
         $line_end = PHP_EOL . '    ' . $conjunction . ' ';
         $i = 0;
         foreach ($conditions as $fieldop => $value) {
@@ -1679,7 +1775,12 @@ class Db
                     if ($vi > 0) {
                         $sql .= $line_end;
                     }
-                    list($field, $op) = explode(':', $vfieldop);
+                    if (strstr($vfieldop, ':')) {
+                        list($field, $op) = explode(':', $vfieldop);
+                    } else {
+                        $field = $vfieldop;
+                        $op = null;
+                    }
                     if (in_array(strtoupper($op), array('IN', 'NOT IN'))) {
                         // handle IN array elements
                         $sql .= $field . ' ' . $op . ' (';
