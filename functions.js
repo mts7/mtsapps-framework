@@ -23,6 +23,21 @@
 
 
     /**
+     * Get the contents of the specified iframe
+     * @returns string
+     * @author Mike Rodarte
+     */
+    $.fn.iframeContents = function() {
+        // be sure this is an iframe
+        if (this[0].nodeName !== 'IFRAME') {
+            return '';
+        }
+
+        return $($(this.contents()[0].body).contents().find('body').context).html();
+    };
+
+
+    /**
      * Determine if an element is a child of a parent
      * Alias for jQuery.contains
      * @param parent string selector
