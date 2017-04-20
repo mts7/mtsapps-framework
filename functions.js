@@ -23,17 +23,22 @@
 
 
     /**
-     * Get the contents of the specified iframe
+     * Get or set the contents of the specified iframe
+     * @param content {string}
      * @returns string
      * @author Mike Rodarte
      */
-    $.fn.iframeContents = function() {
+    $.fn.iframeContents = function(content) {
         // be sure this is an iframe
         if (this[0].nodeName !== 'IFRAME') {
             return '';
         }
 
-        return $($(this.contents()[0].body).contents().find('body').context).html();
+        if (content !== undefined && typeof content === 'string') {
+            $($(this.contents()[0].body).contents().find('body').context).html(content);
+        } else {
+            return $($(this.contents()[0].body).contents().find('body').context).html();
+        }
     };
 
 
