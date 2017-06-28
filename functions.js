@@ -1,3 +1,9 @@
+// create an object for handling the debugging using console wrappers
+var mts = {};
+mts.debugging = false;
+mts.debug = {};
+
+
 (function ($) {
     /**
      * Get all attributes for the given element if there are no arguments, or apply the arguments as typically handled.
@@ -78,7 +84,131 @@
         $selector.css({
             left: Math.floor(left)
         });
-    }
+    };
+
+
+    /**
+     * Get line information for the caller (or whichever element is specified)
+     * @returns {*}
+     */
+    mts.debug.lineInfo = function () {
+        var e = new Error();
+        if (!e.stack) {
+            return {};
+        }
+
+        // this stack element would be 0, so its caller would be 1, which is typically going to be debug functions
+        // 2 should be default to get the caller of the debug function that called this one
+        var numBack = 2;
+        if (arguments[0] !== undefined) {
+            numBack = parseInt(arguments[0]);
+        }
+
+        // split the stack
+        var stack = e.stack.toString().split(/\r\n|\n/);
+
+        // use default value in case provided argument is bad
+        if (!stack.hasOwnProperty(numBack) && stack.hasOwnProperty(2)) {
+            numBack = 2;
+        }
+
+        // get the last function data
+        var lastFunc = stack[numBack];
+        // stack lines have a specific format we need to use to extract data
+        var pattern = /(.+)@(.+):([\d]+):([\d]+)/;
+        // get the matches from the stack line
+        var matches = pattern.exec(lastFunc);
+
+        // make the values easier for people to read
+        return {
+            function: matches[1],
+            file: matches[2],
+            line: matches[3],
+            column: matches[4]
+        };
+    };
+
+
+    /**
+     * Print a trace from a given object
+     * @param lineInfo
+     */
+    mts.debug.printCaller = function(lineInfo) {
+        if (mts.debugging && typeof console.info === 'function') {
+            if (lineInfo === undefined) {
+                lineInfo = mts.debug.lineInfo(3);
+            }
+            console.info(lineInfo.file + ' called ' + lineInfo.function + ' on line ' + lineInfo.line);
+        }
+    };
+
+
+    /**
+     * Alias for console.log that only displays if debugging is enabled
+     */
+    mts.debug.log = function() {
+        if (mts.debugging && typeof console.log === 'function') {
+            console.log.apply(null, arguments);
+        }
+    };
+
+
+    /**
+     * Alias for console.info that only displays if debugging is enabled
+     */
+    mts.debug.info = function() {
+        if (mts.debugging && typeof console.info === 'function') {
+            console.info.apply(null, arguments);
+        }
+    };
+
+
+    /**
+     * Alias for console.warn that only displays if debugging is enabled
+     */
+    mts.debug.warn = function() {
+        if (mts.debugging && typeof console.warn === 'function') {
+            mts.debug.printCaller();
+            console.warn.apply(null, arguments);
+        }
+    };
+
+
+    /**
+     * Alias for console.error that only displays if debugging is enabled
+     */
+    mts.debug.error = function() {
+        if (mts.debugging && typeof console.error === 'function') {
+            console.error.apply(null, arguments);
+        }
+    };
+
+
+    /**
+     * Alias for console.dir that only displays if debugging is enabled
+     */
+    mts.debug.dir = function() {
+        if (mts.debugging && typeof console.dir === 'function') {
+            console.dir.apply(null, arguments);
+        }
+    };
+
+
+    /**
+     * Display arguments based on their types
+     */
+    mts.debug.display = function() {
+        if (!mts.debugging) {
+            return false;
+        }
+        $.each(arguments, function(index, arg) {
+            if (typeof arg === 'object') {
+                mts.debug.dir(arg);
+            } else {
+                mts.debug.log(arg);
+            }
+        });
+    };
 })(jQuery);
 
 
