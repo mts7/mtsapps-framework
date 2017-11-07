@@ -117,10 +117,10 @@ class Helpers
         // AJAX check
         if (!array_key_exists('HTTP_X_REQUESTED_WITH', $_SERVER)) {
             if ($debug) {
-                die('This script must be accessed via AJAX.');
+                exit('This script must be accessed via AJAX.');
             } else {
                 header('HTTP/1.0 403 Forbidden');
-                die('Forbidden');
+                exit('Forbidden');
             }
         }
 
@@ -129,10 +129,10 @@ class Helpers
 
         if (!$refer) {
             if ($debug) {
-                die('This script must be accessed from a page.');
+                exit('This script must be accessed from a page.');
             } else {
                 header('HTTP/1.0 403 Forbidden');
-                die('Forbidden');
+                exit('Forbidden');
             }
         }
 
@@ -142,10 +142,10 @@ class Helpers
         $refer_without_host = preg_replace('/https?:\/\/' . $_SERVER['HTTP_HOST'] . '/', '', $refer);
         if (substr($refer_without_host, 0, strlen($host_dir)) !== $host_dir) {
             if ($debug) {
-                die('This script must be called from this website.');
+                exit('This script must be called from this website.');
             } else {
                 header('HTTP/1.0 403 Forbidden');
-                die('Forbidden');
+                exit('Forbidden');
             }
         }
 
@@ -160,10 +160,10 @@ class Helpers
 
         if (!$valid) {
             if ($debug) {
-                die('The page that called this script is not in the white list.');
+                exit('The page that called this script is not in the white list.');
             } else {
                 header('HTTP/1.0 403 Forbidden');
-                die('Forbidden');
+                exit('Forbidden');
             }
         }
     }

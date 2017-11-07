@@ -69,7 +69,7 @@ class Password
 
         for ($i = 0; $i < $length; $i++) {
             // determine the type of the character
-            $type_index = rand(0, count($types) - 1);
+            $type_index = mt_rand(0, count($types) - 1);
             $type = $char_types[$types[$type_index]];
 
             if ($last_type === $type_index) {
@@ -84,9 +84,9 @@ class Password
             }
 
             // determine how many characters to use for type
-            $num_same = rand(1, $max_same);
+            $num_same = mt_rand(1, $max_same);
             for ($j = 0; $j < $num_same; $j++) {
-                $password .= substr($$type, rand(0, strlen($$type) - 1), 1);
+                $password .= $$type[mt_rand(0, strlen($$type) - 1)];
                 if ($j > 0) {
                     $i++;
                 }
@@ -119,7 +119,7 @@ class Password
         }
 
         // initial variables
-        $seed = !!$unique ? str_replace('.', '', microtime(true)) : 'mts7PasswordGenerator';
+        $seed = (bool) $unique ? str_replace('.', '', microtime(true)) : 'mts7PasswordGenerator';
         $s_first = substr($seed, 0, 5);
         $s_last = substr($seed, 5);
         $symbols = array(0 => ')', 1 => '!', 2 => '@', 3 => '#', 4 => '$', 5 => '%', 6 => '^', 7 => '&', 8 => '*', 9 => '(',
@@ -158,29 +158,30 @@ class Password
 
             // loop position
             if ($pos >= strlen($hash)) {
-                $pos = $pos - strlen($hash);
+                $pos -= strlen($hash);
             }
         }
 
         // convert duplicates to upper case or symbols
         $array = array();
-        for ($i = 0; $i < strlen($temp); $i++) {
+        $length = strlen($temp);
+        for ($i = 0; $i < $length; $i++) {
             $char = $temp[$i];
-            if (!in_array($char, $array)) {
+            if (!in_array($char, $array, true)) {
                 $array[] = $char;
             } else {
                 $sym = $symbols[$char];
                 if (!$sym) {
                     // this is not a number
                     $upper = strtoupper($char);
-                    if (!in_array($upper, $array)) {
+                    if (!in_array($upper, $array, true)) {
                         $array[] = $upper;
                     } else {
                         // this is a character that is repeating->do something with it
                         $array[] = $char;
                     }
                 } else {
-                    if (!in_array($sym, $array)) {
+                    if (!in_array($sym, $array, true)) {
                         $array[] = $sym;
                     } else {
                         // the number and symbol both exist
@@ -219,7 +220,7 @@ class Password
         if (!preg_match('/[!@#\$%\^&\*\(\)]/', $pass)) {
             // find a number
             $matches = array();
-            if (preg_match_all('/([0-9])/', $pass, $matches)) {
+            if (preg_match_all('/([\d])/', $pass, $matches)) {
                 $matches = $matches[1];
                 $num_matches = count($matches);
                 $index = $num_matches > 1 ? $num_matches - 1 : 0;
@@ -261,14 +262,14 @@ class Password
         if (!preg_match('/[a-z]/', $pass)) {
             // there is no lower case letter
             $matches = array();
-            if (preg_match_all('/([0-9])/', $pass, $matches)) {
+            if (preg_match_all('/([\d])/', $pass, $matches)) {
                 $matches = $matches[1];
                 $num_matches = count($matches);
                 $index = $num_matches > 2 ? $num_matches - 2 : 0;
                 $num = $matches[$index];
                 $pos = strrpos($pass, $num);
                 if ($num > 5) {
-                    $num = $num - 5;
+                    $num -= 5;
                 }
                 $letter = $letters[$num];
                 if (!empty($letter)) {
@@ -395,7 +396,7 @@ class Password
         // repeated character patterns: none, some, all
         if (preg_match('/([\w]{3})\1/', $password, $matches) === 1) {
             // a group of 3 characters repeats
-            if ($password == $matches[1] . $matches[1]) {
+            if ($password === $matches[1] . $matches[1]) {
                 $strength += $weights['repeat_all'];
             } else {
                 $strength += $weights['repeat_some'];
@@ -414,7 +415,7 @@ class Password
             for ($i = 0; $i < $length - 2; $i++) {
                 $piece = substr($password, $i, 3);
                 if (array_key_exists($piece, $pieces)) {
-                    $pieces[$piece] += 1;
+                    ++$pieces[$piece];
                     if ($pieces[$piece] >= 3) {
                         $has_repeats = true;
                         break;
@@ -441,7 +442,7 @@ class Password
             }
         }
 
-        if ($count == $length) {
+        if ($count === $length) {
             $strength += $weights['symbols_all'];
         } elseif ($count >= 5) {
             $strength += $weights['symbols_many'];
@@ -449,7 +450,7 @@ class Password
             $strength += $weights['symbols_some'];
         } elseif ($count > 1) {
             $strength += $weights['symbols_few'];
-        } elseif ($count == 1) {
+        } elseif ($count === 1) {
             $strength += $weights['symbols_one'];
         } else {
             $strength += $weights['symbols_none'];

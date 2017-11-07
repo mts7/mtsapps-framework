@@ -193,18 +193,18 @@ class Db
      */
     private function connect()
     {
-        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__);
 
         try {
             if (!Helpers::is_string_ne($this->user)) {
                 $this->Log->write('Cannot connect to database without a user name provided.', Log::LOG_LEVEL_ERROR);
 
-                throw new \Exception('Cannot connect to database without a user name provided.');
+                throw new \InvalidArgumentException('Cannot connect to database without a user name provided.');
             }
 
-            if (strlen($this->host) == 0 || strlen($this->dbname) == 0) {
+            if ('' === $this->host || '' === $this->dbname) {
                 $this->Log->write('Host OR database variables are empty', Log::LOG_LEVEL_WARNING);
-                die();
+                throw new \InvalidArgumentException('Host or database variables are empty');
             }
             $connection_string = 'mysql:host=' . $this->host . ';dbname=' . $this->dbname;
             $this->dbh = new \PDO($connection_string, $this->user, $this->pass, array(\PDO::MYSQL_ATTR_FOUND_ROWS => true));
@@ -212,11 +212,11 @@ class Db
         } catch (\PDOException $e) {
             $this->exception = $e;
             $this->Log->exception($e);
-            die();
+            exit($e->getMessage());
         } catch (\Exception $e) {
             $this->exception = $e;
             $this->Log->exception($e);
-            die();
+            exit($e->getMessage());
         }
     }
 
@@ -226,7 +226,7 @@ class Db
      */
     private function disconnect()
     {
-        $this->Log->write(__METHOD__, Log::LOG_LEVEL_SYSTEM_INFORMATION);
+        $this->Log->write(__METHOD__);
         $this->dbh = null;
     }
 
@@ -472,7 +472,7 @@ class Db
 
             return false;
         }
-        if ((!Helpers::is_array_ne($pairs) && !($pairs instanceof DbIterator))) {
+        if (!$pairs instanceof DbIterator && !Helpers::is_array_ne($pairs)) {
             $this->Log->write('pairs is empty', Log::LOG_LEVEL_WARNING, Helpers::get_type_size($pairs));
             $this->Log->write(Helpers::get_type_size($pairs), Log::LOG_LEVEL_ERROR);
 
@@ -482,7 +482,7 @@ class Db
         $this->Log->write('multiple_rows', Log::LOG_LEVEL_USER, $multiple_rows);
 
         $sql = 'INSERT ';
-        if (!!$ignore) {
+        if ((bool) $ignore) {
             $sql .= 'IGNORE ';
         }
         $sql .= 'INTO ' . $table . PHP_EOL;
@@ -1242,13 +1242,13 @@ class Db
                 $type = 'int';
             } elseif (is_bool($value)) {
                 $type = 'bool';
-            } elseif (is_null($value)) {
+            } elseif (null === $value) {
                 $type = 'NULL';
             }
         }
 
         // check for empty value that is not a number or null
-        if (!(in_array($type, array('int', 'integer', 'decimal', 'double', 'float', 'NULL')) && ($value == 0 || $value == null)) && empty($value)) {
+        if (!(empty($value) && ($value === 0 || $value === null) && in_array($type, array('int', 'integer', 'decimal', 'double', 'float', 'NULL'), true))) {
             $this->Log->write('value is empty', Log::LOG_LEVEL_USER);
 
             return "''";
