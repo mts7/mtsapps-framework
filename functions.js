@@ -388,7 +388,6 @@ function getRandom(start, end) {
   return Math.floor((Math.random() * end) + start);
 }
 
-
 /**
  * Determine if the variable is an actual object
  * @param obj
@@ -397,4 +396,54 @@ function getRandom(start, end) {
  */
 function isObject(obj) {
   return Object.prototype.toString.call(obj) === '[object Object]';
+}
+
+/**
+ * Determine sizes of the screen and return them to the caller.
+ * Outer is the size of the window (plus a little extra).
+ * Screen is the full sizes of the display device.
+ * Available is the size of the window.
+ * Inner is actual space available to web pages.
+ * Banana.
+ *  @returns {{availableHeight: Number, availableWidth: Number, screenHeight: Number, screenWidth: Number, innerHeight: Number, innerWidth: Number, outerHeight: Number, outerWidth: Number, orientation: string, orientationDegrees: *, dpi: string, devicePixelRatio: *, retina: string}}
+ */
+function screenSize() {
+  var aHeight = window.screen.availHeight;
+  var aWidth = window.screen.availWidth;
+  var iWidth = window.innerWidth;
+  var orientation = window.orientation;
+  var retina = window.devicePixelRatio >= 2 ? 'Retina' : 'Not Retina';
+  var higherDpi = iWidth > aWidth;
+  var hiDpi = higherDpi || retina === 'Retina' ? 'High DPI' : 'Low DPI';
+
+  var orientationText = '';
+  if (orientation !== undefined) {
+    switch (orientation) {
+      case -90:
+      case 90:
+        orientationText = 'landscape';
+        break;
+      default:
+        orientationText = 'portrait';
+        break;
+    }
+  } else {
+    orientationText = aHeight > aWidth ? 'portrait' : 'landscape';
+  }
+
+  return {
+    availableHeight: aHeight,
+    availableWidth: aWidth,
+    screenHeight: window.screen.height,
+    screenWidth: window.screen.width,
+    innerHeight: window.innerHeight,
+    innerWidth: iWidth,
+    outerHeight: window.outerHeight,
+    outerWidth: window.outerWidth,
+    orientation: orientationText,
+    orientationDegrees: orientation,
+    dpi: hiDpi,
+    devicePixelRatio: window.devicePixelRatio,
+    retina: retina
+  };
 }
