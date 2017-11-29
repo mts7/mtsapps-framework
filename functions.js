@@ -399,6 +399,63 @@ function isObject(obj) {
 }
 
 /**
+ * Get the string of an object with key/value pairs
+ * @param obj
+ * @returns {string}
+ * @todo Fix the spacing to have indents as needed
+ */
+function getObjectString(obj) {
+  // verify obj is an object
+  if (!isObject(obj)) {
+    return '';
+  }
+
+  // prepare the string
+  var str = '';
+
+  // loop through the object
+  for (var key in obj) {
+    // verify the object has the key as a property
+    if (!obj.hasOwnProperty(key)) {
+      continue;
+    }
+
+    // add the key to the string
+    str += key + ': ';
+
+    // get the value
+    var val = obj[key];
+
+    // add the value to the string
+    if (isObject(val)) {
+      // value is an object, so call this function
+      str += "{\n" + getObjectString(val) + '}';
+    } else {
+      // value is not an object, so add it to the string
+      str += val;
+    }
+
+    // add a new line character once processing finishes
+    str += "\n";
+  }
+
+  return str;
+}
+
+/**
+ * Alert an object in string form
+ * @param obj
+ * @returns {boolean}
+ */
+function objectAlert(obj) {
+  if (!isObject(obj)) {
+    alert('not an object');
+  } else {
+    alert(getObjectString(obj));
+  }
+}
+
+/**
  * Determine sizes of the screen and return them to the caller.
  * Outer is the size of the window (plus a little extra).
  * Screen is the full sizes of the display device.
