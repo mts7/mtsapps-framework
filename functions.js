@@ -399,6 +399,36 @@ function isObject(obj) {
 }
 
 /**
+ * Generate psuedo-random string of characters that is chars long
+ * @param {Number} chars Number of characters to use in the final output
+ * @returns {string}
+ * @see https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript#answer-1349426
+ */
+function generateString(chars) {
+  // validate incoming argument
+  if (isNaN(chars) || typeof chars !== 'number' || chars < 1) {
+    // chars has to be a number that is 0 or greater
+    return '';
+  }
+
+  // create empty string
+  var text = '';
+  // set up possible characters in a string
+  var possible = 'qwertyuiopasdfghjklzxcvbnm QWERTYUIOPASDFGHJKLZXCVBNM9876543210.,;-';
+  // cache the length of the possibilities
+  var possibleLength = possible.length;
+
+  // loop for the number of characters desired
+  for (var i = 0; i < chars; i++) {
+    // get a psuedo-random position of the possible characters and add to the string
+    text += possible.charAt(Math.floor(Math.random() * possibleLength));
+  }
+
+  // return the string of characters
+  return text;
+}
+
+/**
  * Get the string of an object with key/value pairs
  * @param obj
  * @returns {string}
