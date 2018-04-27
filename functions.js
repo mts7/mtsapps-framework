@@ -372,6 +372,20 @@ String.prototype.ucwords = function () {
   return str.trim();
 };
 
+if (typeof ''.repeat !== 'function') {
+  /**
+   * Repeat the string so many times
+   * @param {number} number Number of times to repeat the string
+   * @returns {string}
+   */
+  String.prototype.repeat = function (number) {
+    var string = '';
+    for (var i = 0; i < number; i++) {
+      string += this;
+    }
+    return string;
+  };
+}
 
 /**
  * Generate a random integer between the start and end values.
