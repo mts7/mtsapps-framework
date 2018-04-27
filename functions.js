@@ -389,16 +389,6 @@ function getRandom(start, end) {
 }
 
 /**
- * Determine if the variable is an actual object
- * @param obj
- * @returns {boolean}
- * @see https://stackoverflow.com/questions/8511281/check-if-a-value-is-an-object-in-javascript#answer-42250981
- */
-function isObject(obj) {
-  return Object.prototype.toString.call(obj) === '[object Object]';
-}
-
-/**
  * Generate psuedo-random string of characters that is chars long
  * @param {Number} chars Number of characters to use in the final output
  * @returns {string}
@@ -421,7 +411,7 @@ function generateString(chars) {
   // loop for the number of characters desired
   for (var i = 0; i < chars; i++) {
     // get a psuedo-random position of the possible characters and add to the string
-    text += possible.charAt(Math.floor(Math.random() * possibleLength));
+    text += possible.charAt(getRandom(0, possibleLength));
   }
 
   // return the string of characters
@@ -429,19 +419,49 @@ function generateString(chars) {
 }
 
 /**
- * Get the string of an object with key/value pairs
- * @param obj
+ * Get the true variable type of the variable (since all variables are objects)
+ * @param {*} value
  * @returns {string}
- * @todo Fix the spacing to have indents as needed
  */
-function getObjectString(obj) {
+function getType(value) {
+  return Object.prototype.toString.call(value).replace('[object ', '').replace(']', '');
+}
+
+/**
+ * Determine if the variable is an actual object
+ * @param obj
+ * @returns {boolean}
+ * @see https://stackoverflow.com/questions/8511281/check-if-a-value-is-an-object-in-javascript#answer-42250981
+ */
+function isObject(obj) {
+  return getType(obj) === 'Object';
+}
+
+/**
+ * Get the string of an object with key/value pairs
+ * @param {Array|Object} obj Object or Array for converting to a string
+ * @param indent Multiplier used for getObjectString and getArrayString
+ * @returns {string}
+ */
+function getObjectString(obj, indent) {
+  var objectType = getType(obj);
+  var validTypes = ['Object', 'Array'];
+
   // verify obj is an object
-  if (!isObject(obj)) {
-    return '';
+  if (validTypes.indexOf(objectType) === -1) {
+    // give the user a string representation anyway
+    return getString(obj);
+  }
+
+  // set the multiplier to 1 if it is not set
+  if (indent === undefined) {
+    indent = 1;
   }
 
   // prepare the string
-  var str = '';
+  var string = objectType === 'Object' ? '{' : '[';
+  // set the tab to be 2 spaces times the multiplier
+  var tab = '  '.repeat(indent);
 
   // loop through the object
   for (var key in obj) {
@@ -450,32 +470,90 @@ function getObjectString(obj) {
       continue;
     }
 
-    // add the key to the string
-    str += key + ': ';
+    // start the value on the next line
+    string += '\n' + tab;
+
+    if (objectType === 'Object') {
+      // add the key to the string
+      string += key + ': ';
+    }
 
     // get the value
     var val = obj[key];
 
     // add the value to the string
-    if (isObject(val)) {
+    if (validTypes.indexOf(getType(val)) > -1) {
+      // check for object because of the object keys
+      if (objectType === 'Object') {
+        string += '\n' + tab;
+      }
       // value is an object, so call this function
-      str += "{\n" + getObjectString(val) + '}';
-    } else {
-      // value is not an object, so add it to the string
-      str += val;
+      string += getObjectString(val, indent + 1) + ',';
     }
-
-    // add a new line character once processing finishes
-    str += "\n";
+    else {
+      // value is not an object, so add it to the string
+      string += getString(val) + ',';
+    }
   }
 
-  return str;
+  // remove the trailing comma
+  string = string.replace(/,$/, '');
+
+  // return the string with the closing character at one fewer indent
+  return string + '\n' + '  '.repeat(indent - 1) + (objectType === 'Object' ? '}' : ']');
+} // end getObjectString
+
+/**
+ * Get the string version of a variable
+ * @param value
+ * @returns {*|string}
+ */
+function getString(value) {
+  // set a default value, even though it is overridden by the switch statement
+  var string = '';
+
+  // get the type without the extra object notation
+  var type = getType(value);
+
+  switch (type) {
+    case 'String':
+      string = value;
+      break;
+    case 'Number':
+      string = isNaN(value) ? 'isNaN' : value + '';
+      break;
+    case 'Boolean':
+      string = value ? 'true' : 'false';
+      break;
+    case 'Object':
+    case 'Array':
+      string = getObjectString(value);
+      break;
+    case 'Null':
+      string = 'null';
+      break;
+    case 'Undefined':
+      string = 'undefined';
+      break;
+    default:
+      string = 'unknown type {' + type + '}';
+      break;
+  }
+
+  return string;
+} // end getString
+
+/**
+ * Alert whatever the value is in a formatted version
+ * @param value
+ */
+function stringAlert(value) {
+  alert(getString(value));
 }
 
 /**
  * Alert an object in string form
  * @param obj
- * @returns {boolean}
  */
 function objectAlert(obj) {
   if (!isObject(obj)) {
