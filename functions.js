@@ -387,6 +387,110 @@ if (typeof ''.repeat !== 'function') {
   };
 }
 
+if (typeof Object.equals !== 'function') {
+  /**
+   * Validate that the objects both have the same number of properties and values of the properties are equal
+   * @param {{}} object Object to use for comparison
+   * @returns {boolean}
+   */
+  Object.prototype.equals = function (object) {
+    var thisProperties = Object.getOwnPropertyNames(this);
+    var thatProperties = Object.getOwnPropertyNames(object);
+
+    var thisLength = thisProperties.length;
+    var thatLength = thatProperties.length;
+
+    if (thisLength === 0 && thatLength === 0) {
+      // both are empty objects
+      return true;
+    }
+
+    if (thisLength !== thatLength) {
+      // there are different numbers of properties in each object
+      return false;
+    }
+
+    // iterate through property names
+    for (var property in this) {
+      if (!this.hasOwnProperty(property)) {
+        // property is probably a built-in function
+        continue;
+      }
+
+      // get the actual type of the property since Object and Array do not work with ===
+      var type = Object.prototype.toString.call(this[property]).replace('[object ', '').replace(']', '');
+
+      switch (type) {
+        case 'Object':
+        case 'Array':
+          var valid = this[property].equals(object[property]);
+          if (!valid) {
+            // get out of here once anything is not equal
+            return false;
+          }
+          break;
+        default:
+          if (this[property] !== object[property]) {
+            return false;
+          }
+          break;
+      }
+    } // end loop
+
+    // all checks passed, so either there is bad logic or the comparisons are good
+    return true;
+  }
+}
+
+if (typeof Array.equals !== 'function') {
+  /**
+   * Validate that the arrays both have the same number of elements and values of elements (without sorting first)
+   * @param {[]} array Array to use for comparison
+   * @returns {boolean}
+   */
+  Array.prototype.equals = function (array) {
+    // cache the lengths for comparisons
+    var thisLength = this.length;
+    var thatLength = array.length;
+
+    if (thisLength === 0 && thatLength === 0) {
+      // both are empty arrays, so they are equal
+      return true;
+    }
+
+    if (thisLength !== thatLength) {
+      // the arrays have different lengths, so they can't be equal
+      return false;
+    }
+
+    // iterate through each element
+    for (var i = 0; i < thisLength; i++) {
+      var val = this[i];
+      // get the actual type of the property since Object and Array do not work with ===
+      var type = Object.prototype.toString.call(this[i]).replace('[object ', '').replace(']', '');
+
+      switch (type) {
+        case 'Object':
+        case 'Array':
+          var valid = this[i].equals(array[i]);
+          if (!valid) {
+            // get out of here once anything is not equal
+            return false;
+          }
+          break;
+        default:
+          if (this[i] !== array[i]) {
+            return false;
+          }
+          break;
+      } // end switch type
+    } // end for loop
+
+    // all checks passed, so either there is bad logic or the comparisons are good
+    return true;
+  }
+}
+
 /**
  * Generate a random integer between the start and end values.
  *
@@ -467,6 +571,14 @@ function getObjectString(obj, indent) {
     return getString(obj);
   }
 
+  // return empty braces or brackets if the object is empty
+  if (objectType === 'Object' && Object.keys(obj).length === 0) {
+    return '{}';
+  }
+  if (objectType === 'Array' && obj.length === 0) {
+    return '[]';
+  }
+
   // set the multiplier to 1 if it is not set
   if (indent === undefined) {
     indent = 1;
@@ -520,9 +632,10 @@ function getObjectString(obj, indent) {
 /**
  * Get the string version of a variable
  * @param value
+ * @param {boolean} html Display spaces as &nbsp;
  * @returns {*|string}
  */
-function getString(value) {
+function getString(value, html) {
   // set a default value, even though it is overridden by the switch statement
   var string = '';
 
@@ -552,6 +665,10 @@ function getString(value) {
     default:
       string = 'unknown type {' + type + '}';
       break;
+  }
+
+  if (html === true) {
+    string = string.replace(/ /g, '&nbsp;');
   }
 
   return string;
