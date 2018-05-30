@@ -1,5 +1,6 @@
 /**
  * Functions, prototypes, and plugins useful in web development
+ * @author Mike Rodarte
  */
 
 /**
@@ -86,142 +87,6 @@
       left: Math.floor(left)
     });
   };
-
-
-  /**
-   * Debug class wrapper for console object
-   * @constructor
-   */
-  function Debug() {
-    /**
-     * Public variable to determine if messages should display
-     * @type {boolean}
-     */
-    this.debugging = false;
-    /**
-     * Reference to this object for use within method functions
-     * @type {Debug}
-     */
-    var self = this;
-
-    /**
-     * Get line information for the caller (or whichever element is specified)
-     * @returns {*}
-     */
-    this.lineInfo = function () {
-      var e = new Error();
-      if (!e.stack) {
-        return {};
-      }
-
-      // this stack element would be 0, so its caller would be 1, which is typically going to be debug functions
-      // 2 should be default to get the caller of the debug function that called this one
-      var numBack = 2;
-      if (arguments[0] !== undefined) {
-        numBack = parseInt(arguments[0]);
-      }
-
-      // split the stack
-      var stack = e.stack.toString().split(/\r\n|\n/);
-
-      // use default value in case provided argument is bad
-      if (!stack.hasOwnProperty(numBack) && stack.hasOwnProperty(2)) {
-        numBack = 2;
-      }
-
-      // get the last function data
-      var lastFunc = stack[numBack];
-      // stack lines have a specific format we need to use to extract data
-      var pattern = /(.+)@(.+):([\d]+):([\d]+)/;
-      // get the matches from the stack line
-      var matches = pattern.exec(lastFunc);
-
-      // make the values easier for people to read
-      return {
-        function: matches[1],
-        file: matches[2],
-        line: matches[3],
-        column: matches[4]
-      };
-    };
-
-    /**
-     * Print a trace from a given object
-     * @param lineInfo
-     */
-    this.printCaller = function (lineInfo) {
-      if (this.debugging && typeof console.info === 'function') {
-        if (lineInfo === undefined) {
-          lineInfo = self.lineInfo(3);
-        }
-        console.info(lineInfo.file + ' called ' + lineInfo.function + ' on line ' + lineInfo.line);
-      }
-    };
-
-    /**
-     * Alias for console.log that only displays if debugging is enabled
-     */
-    this.log = function () {
-      if (this.debugging && typeof console.log === 'function') {
-        console.log.apply(null, arguments);
-      }
-    };
-
-    /**
-     * Alias for console.info that only displays if debugging is enabled
-     */
-    this.info = function () {
-      if (this.debugging && typeof console.info === 'function') {
-        console.info.apply(null, arguments);
-      }
-    };
-
-    /**
-     * Alias for console.warn that only displays if debugging is enabled
-     */
-    this.warn = function () {
-      if (this.debugging && typeof console.warn === 'function') {
-        self.printCaller();
-        console.warn.apply(null, arguments);
-      }
-    };
-
-    /**
-     * Alias for console.error that only displays if debugging is enabled
-     */
-    this.error = function () {
-      if (this.debugging && typeof console.error === 'function') {
-        console.error.apply(null, arguments);
-      }
-    };
-
-    /**
-     * Alias for console.dir that only displays if debugging is enabled
-     */
-    this.dir = function () {
-      if (this.debugging && typeof console.dir === 'function') {
-        console.dir.apply(null, arguments);
-      }
-    };
-
-    /**
-     * Display arguments based on their types
-     */
-    this.display = function () {
-      if (!this.debugging) {
-        return false;
-      }
-      $.each(arguments, function (index, arg) {
-        if (typeof arg === 'object') {
-          self.dir(arg);
-        }
-        else {
-          self.log(arg);
-        }
-      });
-    };
-  }
-
 
   /**
    * Generate HTML for a group of radios or a select box
@@ -321,69 +186,42 @@
 })(jQuery);
 
 
-/**
- * Get unique values from an array, not differentiating between types.
- * This was tested alongside of 3 other functions and was found to be the fastest (that ignored type).
- * For a solution that maintains types, do this: return Array.from(new Set(a));
- * Using filter and indexOf is slower than these 2 methods and unsupported in older browsers.
- * phpjs' array_unique was extremely slow in all tests and should be avoided.
- *
- * @returns {Array}
- * @see http://stackoverflow.com/questions/1960473/unique-values-in-an-array#answer-1961068
- */
-Array.prototype.unique = function () {
-  var u = {}, b = [];
-  for (var i = 0, l = this.length; i < l; ++i) {
-    if (u.hasOwnProperty(this[i])) {
-      continue;
-    }
-    b.push(this[i]);
-    u[this[i]] = 1;
-  }
-  return b;
-};
-
-
-/**
- * Uppercase the first character of the string
- * @returns {string}
- */
-String.prototype.ucfirst = function () {
-  return this[0].toUpperCase() + this.substr(1);
-};
-
-
-/**
- * Uppercase the first character of each word
- * @returns {string}
- * @see String.prototype.ucfirst()
- */
-String.prototype.ucwords = function () {
-  var words = this.split(' ');
-  var str = '';
-  for (var i in words) {
-    if (!words.hasOwnProperty(i)) {
-      continue;
-    }
-
-    str += words[i].ucfirst() + ' ';
-  }
-
-  return str.trim();
-};
-
-if (typeof ''.repeat !== 'function') {
+if (typeof Array.prototype.unique !== 'function') {
   /**
-   * Repeat the string so many times
-   * @param {number} number Number of times to repeat the string
-   * @returns {string}
+   * Get unique values from an array, not differentiating between types.
+   * This was tested alongside of 3 other functions and was found to be the fastest (that ignored type).
+   * For a solution that maintains types, do this: return Array.from(new Set(a));
+   * Using filter and indexOf is slower than these 2 methods and unsupported in older browsers.
+   * phpjs' array_unique was extremely slow in all tests and should be avoided.
+   *
+   * @returns {Array}
+   * @see http://stackoverflow.com/questions/1960473/unique-values-in-an-array#answer-1961068
    */
-  String.prototype.repeat = function (number) {
-    var string = '';
-    for (var i = 0; i < number; i++) {
-      string += this;
+  Array.prototype.unique = function () {
+    var u = {}, b = [];
+    for (var i = 0, l = this.length; i < l; ++i) {
+      if (u.hasOwnProperty(this[i])) {
+        continue;
+      }
+      b.push(this[i]);
+      u[this[i]] = 1;
     }
-    return string;
+    return b;
+  };
+}
+
+
+if (typeof Array.prototype.intersect !== 'function') {
+  /**
+   * Find the exact matches between 2 single-dimension arrays
+   * @param {Array} that
+   * @returns {Array}
+   */
+  Array.prototype.intersect = function (that) {
+    var temp = this.filter(function filterSameValue(n) {
+      return that.indexOf(n) !== -1;
+    });
+    return temp.unique();
   };
 }
 
@@ -449,6 +287,11 @@ if (typeof Array.equals !== 'function') {
    * @returns {boolean}
    */
   Array.prototype.equals = function (array) {
+    // if the passed value is not an array, the arrays are not equal
+    if (getType(array) !== 'Array') {
+      return false;
+    }
+
     // cache the lengths for comparisons
     var thisLength = this.length;
     var thatLength = array.length;
@@ -465,7 +308,6 @@ if (typeof Array.equals !== 'function') {
 
     // iterate through each element
     for (var i = 0; i < thisLength; i++) {
-      var val = this[i];
       // get the actual type of the property since Object and Array do not work with ===
       var type = Object.prototype.toString.call(this[i]).replace('[object ', '').replace(']', '');
 
@@ -543,155 +385,6 @@ function generateString(chars) {
  */
 function getType(value) {
   return Object.prototype.toString.call(value).replace('[object ', '').replace(']', '');
-}
-
-/**
- * Determine if the variable is an actual object
- * @param obj
- * @returns {boolean}
- * @see https://stackoverflow.com/questions/8511281/check-if-a-value-is-an-object-in-javascript#answer-42250981
- */
-function isObject(obj) {
-  return getType(obj) === 'Object';
-}
-
-/**
- * Get the string of an object with key/value pairs
- * @param {Array|Object} obj Object or Array for converting to a string
- * @param indent Multiplier used for getObjectString and getArrayString
- * @returns {string}
- */
-function getObjectString(obj, indent) {
-  var objectType = getType(obj);
-  var validTypes = ['Object', 'Array'];
-
-  // verify obj is an object
-  if (validTypes.indexOf(objectType) === -1) {
-    // give the user a string representation anyway
-    return getString(obj);
-  }
-
-  // return empty braces or brackets if the object is empty
-  if (objectType === 'Object' && Object.keys(obj).length === 0) {
-    return '{}';
-  }
-  if (objectType === 'Array' && obj.length === 0) {
-    return '[]';
-  }
-
-  // set the multiplier to 1 if it is not set
-  if (indent === undefined) {
-    indent = 1;
-  }
-
-  // prepare the string
-  var string = objectType === 'Object' ? '{' : '[';
-  // set the tab to be 2 spaces times the multiplier
-  var tab = '  '.repeat(indent);
-
-  // loop through the object
-  for (var key in obj) {
-    // verify the object has the key as a property
-    if (!obj.hasOwnProperty(key)) {
-      continue;
-    }
-
-    // start the value on the next line
-    string += '\n' + tab;
-
-    if (objectType === 'Object') {
-      // add the key to the string
-      string += key + ': ';
-    }
-
-    // get the value
-    var val = obj[key];
-
-    // add the value to the string
-    if (validTypes.indexOf(getType(val)) > -1) {
-      // check for object because of the object keys
-      if (objectType === 'Object') {
-        string += '\n' + tab;
-      }
-      // value is an object, so call this function
-      string += getObjectString(val, indent + 1) + ',';
-    }
-    else {
-      // value is not an object, so add it to the string
-      string += getString(val) + ',';
-    }
-  }
-
-  // remove the trailing comma
-  string = string.replace(/,$/, '');
-
-  // return the string with the closing character at one fewer indent
-  return string + '\n' + '  '.repeat(indent - 1) + (objectType === 'Object' ? '}' : ']');
-} // end getObjectString
-
-/**
- * Get the string version of a variable
- * @param value
- * @param {boolean} html Display spaces as &nbsp;
- * @returns {*|string}
- */
-function getString(value, html) {
-  // set a default value, even though it is overridden by the switch statement
-  var string = '';
-
-  // get the type without the extra object notation
-  var type = getType(value);
-
-  switch (type) {
-    case 'String':
-      string = value;
-      break;
-    case 'Number':
-      string = isNaN(value) ? 'isNaN' : value + '';
-      break;
-    case 'Boolean':
-      string = value ? 'true' : 'false';
-      break;
-    case 'Object':
-    case 'Array':
-      string = getObjectString(value);
-      break;
-    case 'Null':
-      string = 'null';
-      break;
-    case 'Undefined':
-      string = 'undefined';
-      break;
-    default:
-      string = 'unknown type {' + type + '}';
-      break;
-  }
-
-  if (html === true) {
-    string = string.replace(/ /g, '&nbsp;');
-  }
-
-  return string;
-} // end getString
-
-/**
- * Alert whatever the value is in a formatted version
- * @param value
- */
-function stringAlert(value) {
-  alert(getString(value));
-}
-
-/**
- * Alert an object in string form
- * @param obj
- */
-function objectAlert(obj) {
-  if (!isObject(obj)) {
-    alert('not an object');
-  } else {
-    alert(getObjectString(obj));
-  }
 }
 
 /**
