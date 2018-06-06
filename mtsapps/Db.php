@@ -19,7 +19,7 @@ class Db
     /**
      * @var \PDO Database handle
      */
-    private $dbh = null;
+    private $dbh;
 
     /**
      * @var string Database name
@@ -34,7 +34,7 @@ class Db
     /**
      * @var \PDOException Exception
      */
-    private $exception = null;
+    private $exception;
 
     /**
      * @var string Database host
@@ -54,7 +54,7 @@ class Db
     /**
      * @var Log Log object
      */
-    protected $Log = null;
+    protected $Log;
 
     /**
      * @var int Log level
@@ -84,7 +84,7 @@ class Db
     /**
      * @var \PDOStatement PDO Statement
      */
-    private $stmt = null;
+    private $stmt;
 
     /**
      * @var array Array of tables, fields, and descriptions for fields (from DESCRIBE)
@@ -107,7 +107,7 @@ class Db
      *
      * @param array $params
      */
-    public function __construct($params = array())
+    public function __construct(array $params = array())
     {
         // handle logging
         if (Helpers::is_array_ne($params) && array_key_exists('log_level', $params)) {
