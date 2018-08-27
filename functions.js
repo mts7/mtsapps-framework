@@ -286,6 +286,15 @@ function generateString(chars) {
 }
 
 /**
+ * Get the name of the function that is calling this function.
+ * There is no error handling in this function.
+ * @returns {string}
+ */
+function getCaller() {
+  return /\s+at (.+) \((.+):(\d+):(\d+)\)/.exec((new Error).stack.toString().split(/\r\n|\n/)[2])[1];
+}
+
+/**
  * Get the true variable type of the variable (since all variables are objects)
  * @param {*} value
  * @returns {string}
